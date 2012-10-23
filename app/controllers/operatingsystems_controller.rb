@@ -1,15 +1,16 @@
 class OperatingsystemsController < ApplicationController
+  include Foreman::Controller::AutoCompleteSearch
   before_filter :find_os, :only => %w{show edit update destroy bootfiles}
 
   def index
+    values = Operatingsystem.search_for(params[:search], :order => params[:order])
     respond_to do |format|
       format.html do
-        @search           = Operatingsystem.search(params[:search])
-        @operatingsystems = @search.all.paginate(:page => params[:page], :include => [:architectures], :order => :name)
+        @operatingsystems = values.paginate(:page => params[:page])
+        @counter = Host.count(:group => :operatingsystem_id, :conditions => {:operatingsystem_id => @operatingsystems})
       end
-      format.json { render :json => Operatingsystem.all(:include => [:medias, :architectures, :ptables]) }
+      format.json { render :json => values.all(:include => [:media, :architectures, :ptables]) }
     end
-
   end
 
   def new
@@ -22,43 +23,45 @@ class OperatingsystemsController < ApplicationController
     end
   end
 
-
   def create
     @operatingsystem = Operatingsystem.new(params[:operatingsystem])
     if @operatingsystem.save
-      flash[:foreman_notice] = "Successfully created operatingsystem."
-      redirect_to operatingsystems_url
+      process_success
     else
-      render :action => 'new'
+      process_error
     end
   end
 
   def edit
+    # Generates default OS template entries
+    @operatingsystem.config_templates.map(&:template_kind_id).uniq.each do |kind|
+      if @operatingsystem.os_default_templates.where(:template_kind_id => kind).blank?
+        @operatingsystem.os_default_templates.build(:template_kind_id => kind)
+      end
+    end if SETTINGS[:unattended]
   end
 
   def update
     if @operatingsystem.update_attributes(params[:operatingsystem])
-      flash[:foreman_notice] = "Successfully updated operatingsystem."
-      redirect_to operatingsystems_url
+      process_success
     else
-      render :action => 'edit'
+      process_error
     end
   end
 
   def destroy
     if @operatingsystem.destroy
-      flash[:foreman_notice] = "Successfully destroyed operatingsystem."
+      process_success
     else
-      flash[:foreman_error] = @operatingsystem.errors.full_messages.join("<br/>")
+      process_error
     end
-    redirect_to operatingsystems_url
   end
 
   def bootfiles
-    media = Media.find_by_name(params[:media])
+    medium = Medium.find_by_name(params[:medium])
     arch =  Architecture.find_by_name(params[:architecture])
     respond_to do |format|
-      format.json { render :json => @operatingsystem.pxe_files(media, arch)}
+      format.json { render :json => @operatingsystem.pxe_files(medium, arch)}
     end
   rescue => e
     respond_to do |format|

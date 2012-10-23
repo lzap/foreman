@@ -1,0 +1,17 @@
+one:
+  name: DHCP Proxy
+  url: https://somewhere.net:8443
+
+two:
+  name: TFTP Proxy
+  url: http://somewhere.else
+  features: tftp
+
+three:
+  name: DNS Proxy
+  url: http://else.where:4567
+
+puppetmaster:
+  name: Puppetmaster Proxy
+  url: http://else.where:4567
+  features: puppet, 'puppet ca'

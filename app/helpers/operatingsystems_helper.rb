@@ -1,25 +1,40 @@
 module OperatingsystemsHelper
+  include CommonParametersHelper
 
-  # displays release name on debian based distributions on operating system edit page.
-  def show_release
-    update_page do |page|
-      page << "if (value == 'Debian') {"
-      page[:release_name].show
-      page[:release_name].highlight
-      page << "} else {"
-      page[:release_name].hide
-      page << "}"
+  def icon record, opts = {}
+    return "" if record.blank? or record.name.blank?
+    family = case record.name
+    when /fedora/i
+      "Fedora"
+    when /ubuntu/i
+      "Ubuntu"
+    when /solaris|sunos/i
+      "Solaris"
+    when /darwin/i
+      "Darwin"
+    when /centos/i
+      "Centos"
+    when /scientific/i
+      "Scientific"
+    when /archlinux/i
+      "Archlinux"
+    when /SLC/i
+      "SLC"
+    else
+      return "" if record.family.blank?
+      record.family
     end
+
+    image_tag(family+".png", opts) + " "
   end
 
-  # If we use form_for @operatingsystem then we get errors because redhat_path is not available.
-  # If we use form_for :operatingsystem alone then we get the wrong urls generated
-  def family_url os
-    (request.symbolized_path_parameters[:action] =~ /create|new/) ? operatingsystems_path : operatingsystem_path(os)
+  def os_name record, opts = {}
+    "#{icon(record, opts)} #{record}".html_safe
   end
 
-  def family_html_method
-    (request.symbolized_path_parameters[:action] =~ /creatre|new/) ? :post : :put
+  def os_habtm_family type, obj
+    result = type.where(:os_family => obj.family)
+    result.empty? ? type : result
   end
 
 end

@@ -1,12 +1,6 @@
-<% form_for @common_parameter do |f| %>
-  <%= f.error_messages %>
-  <p>
-    <%= f.label :name %><br />
-    <%= f.text_field :name %>
-  </p>
-  <p>
-    <%= f.label :value %><br />
-    <%= f.text_field :value %>
-  </p>
-  <p><%= f.submit "Submit" %></p>
+<%= form_for @common_parameter do |f| %>
+  <%= base_errors_for @common_parameter %>
+  <%= text_f f, :name %>
+  <%= text_f f, :value, :class => "input-xxlarge" %>
+  <%= submit_or_cancel f %>
 <% end %>

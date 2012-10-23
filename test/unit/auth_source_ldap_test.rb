@@ -6,6 +6,9 @@ class AuthSourceLdapTest < ActiveSupport::TestCase
     @attributes = { :name= => "value",
                     :host= => "value",
                     :attr_login= => "value",
+                    :attr_mail= => "some@where.com",
+                    :attr_firstname= => "ohad",
+                    :attr_lastname=  => "daho",
                     :port= => 389 }
     User.current = users(:admin)
   end
@@ -28,22 +31,19 @@ class AuthSourceLdapTest < ActiveSupport::TestCase
 
   test "should exists a attr_login" do
     missing(:attr_login=)
+    @auth_source_ldap.onthefly_register = true
     assert !@auth_source_ldap.save
 
     set(:attr_login=)
+    set(:attr_firstname=)
+    set(:attr_lastname=)
+    set(:attr_mail=)
+    @auth_source_ldap.onthefly_register = true
     assert @auth_source_ldap.save
   end
 
-  test "should exists a port" do
-    missing(:port=)
-    assert !@auth_source_ldap.save
-
-    set(:port=)
-    assert @auth_source_ldap.save
-  end
-
-  test "after initiliaze if port == 0 should automatically change to 389" do
-    other_auth_source_ldap = AuthSourceLdap.new(:port => 0)
+  test "after initialize if port == 0 should automatically change to 389" do
+    other_auth_source_ldap = AuthSourceLdap.new
     assert_equal 389, other_auth_source_ldap.port
   end
 

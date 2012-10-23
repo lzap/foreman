@@ -1,7 +1,12 @@
 class CommonParametersController < ApplicationController
+  include Foreman::Controller::AutoCompleteSearch
+
   def index
-    @search            = CommonParameter.search(params[:search])
-    @common_parameters = @search.paginate(:page => params[:page])
+    values = CommonParameter.search_for(params[:search], :order => params[:order])
+    respond_to do |format|
+      format.html { @common_parameters = values.paginate(:page => params[:page]) }
+      format.json { render :json => values}
+    end
   end
 
   def new
@@ -11,10 +16,9 @@ class CommonParametersController < ApplicationController
   def create
     @common_parameter = CommonParameter.new(params[:common_parameter])
     if @common_parameter.save
-      flash[:foreman_notice] = "Successfully created common parameter."
-      redirect_to common_parameters_url
+      process_success
     else
-      render :action => 'new'
+      process_error
     end
   end
 
@@ -25,17 +29,18 @@ class CommonParametersController < ApplicationController
   def update
     @common_parameter = CommonParameter.find(params[:id])
     if @common_parameter.update_attributes(params[:common_parameter])
-      flash[:foreman_notice] = "Successfully updated common parameter."
-      redirect_to common_parameters_url
+      process_success
     else
-      render :action => 'edit'
+      process_error
     end
   end
 
   def destroy
     @common_parameter = CommonParameter.find(params[:id])
-    @common_parameter.destroy
-    flash[:foreman_notice] = "Successfully destroyed common parameter."
-    redirect_to common_parameters_url
+    if @common_parameter.destroy
+      process_success
+    else
+      process_error
+    end
   end
 end

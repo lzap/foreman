@@ -2,15 +2,8 @@ require 'test_helper'
 
 class FactValueTest < ActiveSupport::TestCase
   def setup
-    as_admin do
-      @host = Host.create :name => "myfullhost", :mac => "aabbecddeeff", :ip => "123.05.02.03",
-                          :domain => Domain.find_or_create_by_name("company.com"),
-                          :operatingsystem => Operatingsystem.first,
-                          :architecture => Architecture.find_or_create_by_name("i386"),
-                          :environment => Environment.find_or_create_by_name("envy"),
-                          :disk => "empty partition"
-    end
-    @fact_name  = Puppet::Rails::FactName.create(:name => "my_facting_name")
+    @host = hosts(:one)
+    @fact_name  = FactName.create(:name => "my_facting_name")
     @fact_value = FactValue.create(:value => "some value", :host => @host, :fact_name => @fact_name)
   end
 
@@ -19,20 +12,13 @@ class FactValueTest < ActiveSupport::TestCase
 #  end
 
   test "should return the count of each fact" do
-    h = {"Some value"=>1}
+    h = {"some value"=>1}
     assert_equal h, FactValue.count_each("my_facting_name")
 
     #Now creating a new fact value
-    as_admin do
-      @other_host = Host.create :name => "myfullhost2", :mac => "aabbccddeefa", :ip => "123.05.02.04",
-                                :domain => Domain.find_or_create_by_name("company.com"),
-                                :operatingsystem => Operatingsystem.first,
-                                :architecture => Architecture.find_or_create_by_name("i386"),
-                                :environment => Environment.find_or_create_by_name("envy"),
-                                :disk => "empty partition"
-    end
+    @other_host = hosts(:two)
     other_fact_value = FactValue.create(:value => "some value", :host => @other_host, :fact_name => @fact_name)
-    h["Some value"] = 2
+    h["some value"] = 2
     assert_equal h, FactValue.count_each("my_facting_name")
   end
 end

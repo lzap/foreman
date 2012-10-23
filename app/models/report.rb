@@ -1,28 +1,43 @@
 class Report < ActiveRecord::Base
   include Authorization
+  include ReportCommon
   belongs_to :host
-  has_many :messages, :through => :logs, :dependent => :destroy
-  has_many :sources, :through => :logs, :dependent => :destroy
+  has_many :messages, :through => :logs
+  has_many :sources, :through => :logs
   has_many :logs, :dependent => :destroy
   validates_presence_of :host_id, :reported_at, :status
   validates_uniqueness_of :reported_at, :scope => :host_id
 
-  METRIC = %w[applied restarted failed failed_restarts skipped]
-  BIT_NUM = 6
-  MAX = (1 << BIT_NUM) -1 # maximum value per metric
+  scoped_search :in => :host,     :on => :name, :complete_value => true, :rename => :host
+  scoped_search :in => :messages, :on => :value,                         :rename => :log
+  scoped_search :in => :sources,  :on => :value,                         :rename => :resource
 
-  # search for a metric - e.g.:
-  # Report.with("failed") --> all reports which have a failed counter > 0
-  # Report.with("failed",20) --> all reports which have a failed counter > 20
-  named_scope :with, lambda { |*arg| { :conditions =>
-    "(status >> #{BIT_NUM*METRIC.index(arg[0])} & #{MAX}) > #{arg[1] || 0}"}
+  scoped_search :on => :reported_at, :complete_value => true, :default_order => :desc,    :rename => :reported
+  scoped_search :on => :status, :offset => 0, :word_size => 4*BIT_NUM, :complete_value => {:true => true, :false => false}, :rename => :eventful
+
+  scoped_search :on => :status, :offset => METRIC.index("applied"),         :word_size => BIT_NUM, :rename => :applied
+  scoped_search :on => :status, :offset => METRIC.index("restarted"),       :word_size => BIT_NUM, :rename => :restarted
+  scoped_search :on => :status, :offset => METRIC.index("failed"),          :word_size => BIT_NUM, :rename => :failed
+  scoped_search :on => :status, :offset => METRIC.index("failed_restarts"), :word_size => BIT_NUM, :rename => :failed_restarts
+  scoped_search :on => :status, :offset => METRIC.index("skipped"),         :word_size => BIT_NUM, :rename => :skipped
+  scoped_search :on => :status, :offset => METRIC.index("pending"),         :word_size => BIT_NUM, :rename => :pending
+
+  # returns reports for hosts in the User's filter set
+  scope :my_reports, lambda {
+    return { :conditions => "" } if User.current.admin? # Admin can see all hosts
+
+    conditions = sanitize_sql_for_conditions([" (reports.host_id in (?))", Host.my_hosts.map(&:id)])
+    conditions.sub!(/\s*\(\)\s*/, "")
+    conditions.sub!(/^(?:\(\))?\s?(?:and|or)\s*/, "")
+    conditions.sub!(/\(\s*(?:or|and)\s*\(/, "((")
+    {:conditions => conditions}
   }
 
   # returns recent reports
-  named_scope :recent, lambda { |*args| {:conditions => ["reported_at > ?", (args.first || 1.day.ago)]} }
+  scope :recent, lambda { |*args| {:conditions => ["reported_at > ?", (args.first || 1.day.ago)], :order => "reported_at"} }
 
   # with_changes
-  named_scope :interesting, {:conditions => "status != 0"}
+  scope :interesting, {:conditions => "status != 0"}
 
   # a method that save the report values (e.g. values from METRIC)
   # it is not supported to edit status values after it has been written once.
@@ -30,18 +45,6 @@ class Report < ActiveRecord::Base
     s = st if st.is_a?(Integer)
     s = Report.calc_status st if st.is_a?(Hash)
     write_attribute(:status,s) unless s.nil?
-  end
-
-  #returns metrics
-  #when no metric type is specific returns hash with all values
-  #passing a METRIC member will return its value
-  def status(type = nil)
-    raise "invalid type #{type}" if type and not METRIC.include?(type)
-    h = {}
-    (type || METRIC).each do |m|
-      h[m] = (read_attribute(:status) || 0) >> (BIT_NUM*METRIC.index(m)) & MAX
-    end
-    return type.nil? ? h : h[type]
   end
 
   # extracts serialized metrics and keep them as a hash_with_indifferent_access
@@ -54,34 +57,16 @@ class Report < ActiveRecord::Base
     write_attribute(:metrics,m.to_yaml) unless m.nil?
   end
 
-  # generate dynamically methods for all metrics
-  # e.g. Report.last.applied
-  METRIC.each do |method|
-    define_method method do
-      status method
-    end
-  end
-
-  # returns true if total error metrics are > 0
-  def error?
-    %w[failed failed_restarts].sum {|f| status f} > 0
-  end
-
-  # returns true if total action metrics are > 0
-  def changes?
-    %w[applied restarted].sum {|f| status f} > 0
-  end
-
   def to_label
     "#{host.name} / #{reported_at.to_s}"
   end
 
   def config_retrieval
-    metrics[:time][:config_retrieval].round_with_precision(2)
+    metrics[:time][:config_retrieval].round_with_precision(2) rescue 0
   end
 
   def runtime
-    (metrics[:time][:total] || metrics[:time].values.sum).round_with_precision(2)
+    (metrics[:time][:total] || metrics[:time].values.sum).round(2) rescue 0
   end
 
   #imports a YAML report into database
@@ -90,13 +75,16 @@ class Report < ActiveRecord::Base
     raise "Invalid report" unless report.is_a?(Puppet::Transaction::Report)
     logger.info "processing report for #{report.host}"
     begin
-      host = Host.find_or_create_by_name report.host
+      host = Host.find_by_certname report.host
+      host ||= Host.find_by_name report.host
+      host ||= Host.new :name => report.host
 
       # parse report metrics
-      raise "Invalid report: can't find metrics information for #{report.host} at #{report.id}" if report.metrics.nil?
+      raise "Invalid report: can't find metrics information for #{host} at #{report.id}" if report.metrics.nil?
 
       # Is this a pre 2.6.x report format?
-      @pre26 = !report.instance_variables.include?("@resource_statuses")
+      @post265 = report.instance_variables.include?("@report_format")
+      @pre26   = !report.instance_variables.include?("@resource_statuses")
 
       # convert report status to bit field
       st = calc_status(metrics_to_hash(report))
@@ -113,12 +101,16 @@ class Report < ActiveRecord::Base
       # 1. It might be auto imported, therefore might not be valid (e.g. missing partition table etc)
       # 2. We want this to be fast and light on the db.
       # at this point, the report is important, not as much of the host
-      host.save_with_validation(false)
+      host.save(:validate => false)
 
       # and save our report
       r = self.create!(:host => host, :reported_at => report.time.utc, :status => st, :metrics => self.m2h(report.metrics))
       # Store all Puppet message logs
       r.import_log_messages report
+      # if we are using storeconfigs then we already have the facts
+      # so we can refresh foreman internal fields accordingly
+      host.populateFieldsFromFacts if Setting[:using_storeconfigs]
+      r.inspect_report
       return r
     rescue Exception => e
       logger.warn "Failed to process report for #{report.host} due to:#{e}"
@@ -159,22 +151,45 @@ class Report < ActiveRecord::Base
     status = conditions[:status]
     cond = "created_at < \'#{(Time.now.utc - timerange).to_formatted_s(:db)}\'"
     cond += " and status = #{status}" unless status.nil?
-    # delete the reports, must use destroy_all vs. delete_all because of assoicated logs and METRIC
-    count = Report.destroy_all(cond)
+    # using find in batches to reduce the memory abuse
+    # trying to be smart about how to delete reports and their associated data, so it would be
+    # as fast as possible without a lot of performance penalties.
+    count = 0
+    Report.find_in_batches(:conditions => cond, :select => :id) do |reports|
+      report_ids = reports.map &:id
+      Log.delete_all({:report_id => report_ids})
+      count += Report.delete_all({:id => report_ids})
+    end
+    # try to find all non used logs, messages and sources
+
+    # first extract all information from our logs
+    all_reports, used_messages, used_sources = [],[],[]
+    Log.find_in_batches do |logs|
+      logs.each do |log|
+        all_reports << log.report_id unless log.report_id.blank?
+        used_messages << log.message_id unless log.message_id.blank?
+        used_sources << log.source_id unless log.source_id.blank?
+      end
+    end
+
+    all_reports.uniq! ; used_messages.uniq! ; used_sources.uniq!
+
+    # reports which have logs entries
+    used_reports = Report.all(:select => :id, :conditions => {:id => all_reports}).map(&:id)
+
+    orphaned_logs = all_reports - used_reports
+    Log.delete_all({:report_id => orphaned_logs}) unless orphaned_logs.empty?
+
+    all_messages = Message.all(:select => :id).map(&:id)
+    orphaned_messages = all_messages - used_messages
+    Message.delete_all({:id => orphaned_messages}) unless orphaned_messages.empty?
+
+    all_sources = Source.all(:select => :id).map(&:id)
+    orphaned_sources = all_sources - used_sources
+    Source.delete_all({:id => orphaned_sources}) unless orphaned_sources.empty?
+
     logger.info Time.now.to_s + ": Expired #{count} Reports"
     return count
-  end
-
-  def self.count_puppet_runs(interval = nil)
-    interval ||= SETTINGS[:puppet_interval] / 10
-    counter = []
-    now=Time.now.utc
-    (1..(SETTINGS[:puppet_interval] / interval)).each do
-      ago = now - interval.minutes
-      counter << [ now.getlocal, Report.count(:all, :conditions => {:reported_at => ago..(now-1.second)})]
-      now = ago
-    end
-    counter
   end
 
   def import_log_messages report
@@ -188,6 +203,33 @@ class Report < ActiveRecord::Base
     end
   end
 
+  def inspect_report
+    if error?
+      # found a report with errors
+      # notify via email IF enabled is set to true
+      logger.warn "#{report.host} is disabled - skipping." and return if host.disabled?
+
+      logger.debug "error detected, checking if we need to send an email alert"
+      HostMailer.error_state(self).deliver if Setting[:failed_report_email_notification]
+      # add here more actions - e.g. snmp alert etc
+    end
+  rescue => e
+    logger.warn "failed to send failure email notification: #{e}"
+  end
+
+  # represent if we have a report --> used to ensure consistency across host report state the report itself
+  def no_report
+    false
+  end
+
+  def as_json(options={})
+    {:report =>
+      { :reported_at => reported_at, :status => status,
+        :host => host.name, :metrics => metrics, :logs => logs.all(:include => [:source, :message]),
+        :id => id, :summary => summaryStatus
+      },
+    }
+  end
   private
 
   # Converts metrics form Puppet report into a hash
@@ -202,7 +244,8 @@ class Report < ActiveRecord::Base
         report_status[m] = metrics["resources"][m.to_sym]
       else
         h=translate_metrics_to26(m)
-        report_status[m] = metrics[h[:type]][h[:name]]
+        mv = metrics[h[:type]]
+        report_status[m] = mv[h[:name].to_sym] + mv[h[:name].to_s] rescue nil
       end
       report_status[m] ||= 0
     end
@@ -211,6 +254,10 @@ class Report < ActiveRecord::Base
     # sometimes there are skip values, but there are no error messages, we ignore them.
     if report_status["skipped"] > 0 and ((report_status.values.sum) - report_status["skipped"] == report.logs.size)
       report_status["skipped"] = 0
+    end
+    # fix for reports that contain no metrics (i.e. failed catalog)
+    if @post265 and report.respond_to?(:status) and report.status == "failed"
+      report_status["failed"] += 1
     end
     return report_status
   end
@@ -251,9 +298,21 @@ class Report < ActiveRecord::Base
   def self.translate_metrics_to26 metric
     case metric
     when "applied"
-      { :type => "changes", :name => :total}
+      if @post265
+        { :type => "changes", :name => "total"}
+      else
+        { :type => "total", :name => :changes}
+      end
+    when "failed_restarts"
+      if @pre26
+        { :type => "resources", :name => metric}
+      else
+        { :type => "resources", :name => "failed_to_restart"}
+      end
+    when "pending"
+      { :type => "events", :name => "noop" }
     else
-      { :type => "resources", :name => metric.to_sym}
+      { :type => "resources", :name => metric}
     end
   end
 
@@ -265,7 +324,18 @@ class Report < ActiveRecord::Base
     return true if operation == "create"
     return true if operation == "destroy" and User.current.allowed_to?(:destroy_reports)
 
-    errors.add_to_base "You do not have permission to #{operation} this report"
+    errors.add :base, "You do not have permission to #{operation} this report"
     false
+  end
+
+  def summaryStatus
+    return "Failed"   if error?
+    return "Modified" if changes?
+    return "Success"
+  end
+
+  # puppet report status table column name
+  def self.report_status
+    "status"
   end
 end

@@ -2,6 +2,9 @@
 
 x86_64:
    name: x86_64
-#
-# two:
-#   column: value
+
+sparc:
+  name: sparc
+
+s390:
+  name: s390

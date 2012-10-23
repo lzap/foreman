@@ -1,19 +1,26 @@
 require 'digest/sha1'
+require 'foreman/threadsession'
 
 class User < ActiveRecord::Base
   include Authorization
+  include Foreman::ThreadSession::UserModel
+  audited :except => [:last_login_on, :password, :password_hash, :password_salt, :password_confirmation]
+  self.auditing_enabled = !defined?(Rake)
+
   attr_protected :password_hash, :password_salt, :admin
-  attr_accessor :password, :password_confirmation
+  attr_accessor :password, :password_confirmation, :editing_self
 
   belongs_to :auth_source
-  has_many :changes, :class_name => 'Audit', :as => :user
+  has_many :auditable_changes, :class_name => '::Audit', :as => :user
+  has_many :usergroup_member, :as => :member
   has_many :usergroups, :through => :usergroup_member
   has_many :direct_hosts, :as => :owner, :class_name => "Host"
   has_and_belongs_to_many :notices, :join_table => 'user_notices'
   has_many :user_roles
   has_many :roles, :through => :user_roles
-  has_and_belongs_to_many :domains,    :join_table => "user_domains"
-  has_and_belongs_to_many :hostgroups, :join_table => "user_hostgroups"
+  has_and_belongs_to_many :compute_resources, :join_table => "user_compute_resources"
+  has_and_belongs_to_many :domains,           :join_table => "user_domains"
+  has_and_belongs_to_many :hostgroups,        :join_table => "user_hostgroups"
   has_many :user_facts, :dependent => :destroy
   has_many :facts, :through => :user_facts, :source => :fact_name
 
@@ -27,20 +34,30 @@ class User < ActiveRecord::Base
   validates_length_of :login, :maximum => 30
   validates_format_of :firstname, :lastname, :with => /^[\w\s\'\-\.]*$/i, :allow_nil => true
   validates_length_of :firstname, :lastname, :maximum => 30, :allow_nil => true
-  validates_format_of :mail, :with => /^([^@\s]+)@((?:[-a-z0-9]+\.)+[a-z]{2,})$/i, :allow_nil => true
+  validates_format_of :mail, :with => /^([^@\s]+)@((?:[-a-z0-9]+\.)*[a-z]{2,})$/i, :allow_nil => true
   validates_length_of :mail, :maximum => 60, :allow_nil => true
 
-  before_destroy Ensure_not_used_by.new(:hosts), :ensure_admin_is_not_deleted
-  validate :name_used_in_a_usergroup
-  before_validation :prepare_password
-  after_destroy Proc.new {|user| user.domains.clear; user.hostgroups.clear}
+  before_destroy EnsureNotUsedBy.new(:hosts), :ensure_admin_is_not_deleted
+  validate :name_used_in_a_usergroup, :ensure_admin_is_not_renamed
+  before_validation :prepare_password, :normalize_mail
+  after_destroy Proc.new {|user| user.compute_resources.clear; user.domains.clear; user.hostgroups.clear}
 
-  cattr_accessor :current
+  scoped_search :on => :login, :complete_value => :true
+  scoped_search :on => :firstname, :complete_value => :true
+  scoped_search :on => :lastname, :complete_value => :true
+  scoped_search :on => :mail, :complete_value => :true
+  scoped_search :on => :admin, :complete_value => {:true => true, :false => false}
+  scoped_search :on => :last_login_on, :complete_value => :true
+  scoped_search :in => :roles, :on => :name, :rename => :role, :complete_value => true
 
   def to_label
     "#{firstname} #{lastname}"
   end
   alias_method :name, :to_label
+
+  def to_param
+    "#{id}-#{login.parameterize}"
+  end
 
   def <=>(other)
     self.name.downcase <=> other.name.downcase
@@ -52,11 +69,15 @@ class User < ActiveRecord::Base
   end
 
   def self.create_admin
-    email = SETTINGS[:administrator] || "root@" + Facter.domain
+    email = Setting[:administrator]
     user = User.create(:login => "admin", :firstname => "Admin", :lastname => "User",
                        :mail => email, :auth_source => AuthSourceInternal.first, :password => "changeme")
     user.update_attribute :admin, true
     user
+  end
+
+  def self.admin
+    find_by_login 'admin' or create_admin
   end
 
   # Tries to find the user in the DB and then authenticate against their authentication source
@@ -67,39 +88,30 @@ class User < ActiveRecord::Base
     # Make sure no one can sign in with an empty password
     return nil if password.to_s.empty?
 
-    if user = find_by_login(login)
-      # user is already in local database
+    # user is already in local database
+    if (user = find_by_login(login))
+      # user has an authentication method and the authentication was successful
       if user.auth_source and user.auth_source.authenticate(login, password)
-        # user has an authentication method and the authentication was successful
-        User.current = user
-        user.update_attribute(:last_login_on, Time.now.utc)
+        logger.debug "Authenticated user #{user} against #{user.auth_source} authentication source"
       else
+        logger.debug "Failed to authenicate #{user} against #{user.auth_source} authentication source"
         user = nil
       end
     else
-      # user is not yet registered, try to authenticate with available sources
-      attrs = AuthSource.authenticate(login, password)
-      if attrs
-        user = new(*attrs)
-        user.login = login
-        # The default user can't auto create users, we need to change to Admin for this to work
-        User.current = User.find_by_login "admin"
-        if user.save
-          user.reload
-          logger.info "User '#{user.login}' auto-created from #{user.auth_source}"
-          user.update_attribute(:last_login_on, Time.now.utc)
-        else
-          logger.info "Failed to save User '#{user.login}' #{user.errors.full_messages}"
-          user = nil
-        end
+      user = try_to_auto_create_user(login, password)
+    end
+    if user
+      as "admin" do
+        user.update_attribute(:last_login_on, Time.now.utc)
+        anonymous = Role.find_by_name("Anonymous")
+        user.roles << anonymous unless user.roles.include?(anonymous)
         User.current = user
       end
+    else
+      logger.info "invalid user"
+      User.current = nil
     end
-    anonymous = Role.find_by_name("Anonymous")
-    User.current.roles <<  anonymous unless user.nil? or User.current.roles.include?(anonymous)
-    return user
-  rescue => text
-    raise text
+    user
   end
 
   def matching_password?(pass)
@@ -136,9 +148,8 @@ class User < ActiveRecord::Base
   # * a permission Symbol (eg. :edit_project)
   def allowed_to?(action, options={})
     return true if admin?
-
-    return false if roles.empty?
-    roles.detect {|role| role.allowed_to?(action)}
+    return true if editing_self
+    roles.detect {|role| role.allowed_to?(action)}.present?
   end
 
   def logged?
@@ -148,9 +159,10 @@ class User < ActiveRecord::Base
   # Indicates whether the user has host filtering enabled
   # Returns : Boolean
   def filtering?
-    filter_on_owner or
-    domains.any?    or
-    hostgroups.any? or
+    filter_on_owner        or
+    compute_resources.any? or
+    domains.any?           or
+    hostgroups.any?        or
     facts.any?
   end
 
@@ -167,11 +179,35 @@ class User < ActiveRecord::Base
     Digest::SHA1.hexdigest([pass, password_salt].join)
   end
 
+  def self.try_to_auto_create_user(login, password)
+    return nil if login.blank? or password.blank?
+
+    # user is not yet registered, try to authenticate with available sources
+    if (attrs = AuthSource.authenticate(login, password))
+      user = new(*attrs)
+      user.login = login
+      # The default user can't auto create users, we need to change to Admin for this to work
+      User.as "admin" do
+        if user.save
+          logger.info "User '#{user.login}' auto-created from #{user.auth_source}"
+        else
+          logger.info "Failed to save User '#{user.login}' #{user.errors.full_messages}"
+          user = nil
+        end
+      end
+      user
+    end
+  end
+
+  def normalize_mail
+    self.mail.gsub!(/\s/,'') unless mail.blank?
+  end
+
   protected
 
   def name_used_in_a_usergroup
     if Usergroup.all.map(&:name).include?(self.login)
-      errors.add_to_base "A usergroup already exists with this name"
+      errors.add :base, "A usergroup already exists with this name"
     end
   end
 
@@ -180,10 +216,15 @@ class User < ActiveRecord::Base
   # admin account automatically
   def ensure_admin_is_not_deleted
     if login == "admin"
-      errors.add_to_base "Can't delete internal admin account"
+      errors.add :base, "Can't delete internal admin account"
       logger.warn "Unable to delete internal admin account"
-      return false
+      false
     end
   end
 
+  def ensure_admin_is_not_renamed
+    if login_changed? and login_was == "admin"
+      errors.add :login, "Can't rename internal protected <b>admin</b> account to #{login}".html_safe
+    end
+  end
 end

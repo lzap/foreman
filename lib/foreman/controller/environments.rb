@@ -3,26 +3,34 @@
 module Foreman::Controller::Environments
 
   def import_environments
-    @changed = Environment.importClasses
-    if @changed[:obsolete][:environments].size > 0 or @changed[:obsolete][:puppetclasses].size > 0 or
-      @changed[:new][:environments].size > 0       or @changed[:new][:puppetclasses].size > 0
-      @grouping = 3
-      render :partial => "common/puppetclasses_or_envs_changed", :layout => true
-    else
-      redirect_to :back
+    begin
+      opts      = params[:proxy].blank? ? { } : { :url => SmartProxy.find(params[:proxy]).try(:url) }
+      @importer = PuppetClassImporter.new(opts)
+      @changed  = @importer.changes
+    rescue => e
+      if e.message =~ /puppet feature/i
+        error "We did not find a foreman proxy that can provide the information, ensure that you have at least one Proxy with the puppet feature turned on."
+        redirect_to :controller => controller_path and return
+      else
+        raise e
+      end
     end
-  rescue Exception => e
-    flash[:foreman_error] = e
-    redirect_to :back
+
+    if @changed["new"].size > 0 or @changed["obsolete"].size > 0 or @changed["updated"].size > 0
+      render "common/_puppetclasses_or_envs_changed"
+    else
+      notice "No changes to your environments detected"
+      redirect_to :controller => controller_path
+    end
   end
 
   def obsolete_and_new
-    if (errors = Environment.obsolete_and_new(params[:changed])).empty?
-      flash[:foreman_notice] = "Succcessfully updated environments and puppetclasses from the on-disk puppet installation"
+    if (errors = ::PuppetClassImporter.new.obsolete_and_new(params[:changed])).empty?
+      notice "Successfully updated environments and puppetclasses from the on-disk puppet installation"
     else
-      flash[:foreman_error]  = "Failed to update the environments and puppetclasses from the on-disk puppet installation<br/>" + errors.join("<br>")
+      error "Failed to update the environments and puppetclasses from the on-disk puppet installation<br/>" + errors.join("<br>")
     end
-    redirect_to puppetclasses_path
+    redirect_to :controller => controller_path
   end
 
 end

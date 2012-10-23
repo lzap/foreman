@@ -1,13 +1,12 @@
 class PtablesController < ApplicationController
+  include Foreman::Controller::AutoCompleteSearch
   before_filter :find_ptable, :only => %w{show edit update destroy}
 
   def index
+    values = Ptable.search_for(params[:search], :order => params[:order])
     respond_to do |format|
-      format.html do
-        @search  = Ptable.search params[:search]
-        @ptables = @search.paginate(:page => params[:page], :include => [:operatingsystems])
-      end
-      format.json { render :json => Ptable.all }
+      format.html { @ptables = values.paginate :page => params[:page], :include => [:operatingsystems] }
+      format.json { render :json => values }
     end
   end
 
@@ -24,10 +23,9 @@ class PtablesController < ApplicationController
   def create
     @ptable = Ptable.new(params[:ptable])
     if @ptable.save
-      flash[:foreman_notice] = "Successfully created partition table."
-      redirect_to ptables_url
+      process_success
     else
-      render :action => 'new'
+      process_error
     end
   end
 
@@ -36,17 +34,18 @@ class PtablesController < ApplicationController
 
   def update
     if @ptable.update_attributes(params[:ptable])
-      flash[:foreman_notice] = "Successfully updated partition table."
-      redirect_to ptables_url
+      process_success
     else
-      render :action => 'edit'
+      process_error
     end
   end
 
   def destroy
-    @ptable.destroy
-    flash[:foreman_notice] = "Successfully destroyed partition table."
-    redirect_to ptables_url
+    if @ptable.destroy
+      process_success
+    else
+      process_error
+    end
   end
 
   private

@@ -1,42 +1,22 @@
-<% title @report.host.name -%>
-Reported at <%= @report.reported_at.getlocal %>, which is <b><%= time_ago_in_words(@report.reported_at) %> ago</b>
-<% if @offset > 100 -%>
-  <div class="flash error">
-    Host time seems to be a drift <br/>
-    Host reported time is <%= @report.reported_at %> <br/>
-    Foreman report creation time is <%= @report.created_at %> <br/>
-    Which is an offset of <%= distance_of_time_in_words(@report.reported_at, @report.created_at, true) %>
+<% title "#{@report.host} - #{time_ago_in_words(@report.reported_at)} ago"%>
+<div class="row ra"><p class="span12"> Reported at <%= @report.reported_at.getlocal %></p></div>
+<% if @offset > 10 -%>
+  <div class="alert alert-message alert-block alert-error">
+    <a class="close" href="#" data-dismiss="alert">&times;</a>
+    <h3>Host time seems to be adrift!</h3>
+    Host reported time is <em><%= @report.reported_at %></em> <br/>
+    Foreman report creation time is <em><%= @report.created_at %></em> <br/>
+    Which is an offset of <b><%= distance_of_time_in_words(@report.reported_at, @report.created_at, true) %></b>
   </div>
 <% end -%>
 
-<% if @report.logs.size > 0 -%>
-  <%= render :partial => 'output', :locals => { :logs => @report.logs} %>
-<% end -%>
+<% content_for(:search_bar) {logs_show} %>
 
-<div class="flash">
-  <table style="width:100%;" border="0">
-    <tr>
-      <td> <b>Metrics</b></td>
-      <td>
-        <table style="width:100%;">
-          <% @report.metrics["time"].each do |label, value|-%>
-            <% if label.to_s =~ /total/i then -%>
-              <%   @totaltime = value -%>
-              <%   next -%>
-            <% end -%>
-            <tr>
-              <td> <%= h label %> </td>
-              <td> <%= value.round_with_precision(4) rescue "N/A"%> </td>
-            </tr>
-          <% end %>
-          <tr><td class="last_row">Total</td><td class="last_row"><%= h (@totaltime || @report.runtime).round_with_precision(4) rescue "N/A"%></td></tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</div>
+<%= render 'output', :logs => @report.logs%>
+<%= render 'metrics', :status => @report.status, :metrics => @report.metrics["time"] if @report.metrics["time"] -%>
 
-<%= link_to 'Back', :back %> |
-<%= display_link_if_authorized 'Delete', hash_for_report_path(:id => @report, :auth_action => :destroy), :method => :delete -%> |
-<%= link_to "Host details", @report.host %> |
-<%= link_to "Other reports for this hosts", reports_host_path(@report.host) %>
+<%= title_actions link_to('Back', :back),
+  display_delete_if_authorized(hash_for_report_path(:id => @report), :class=> "btn btn-danger"),
+  link_to("Host details", @report.host),
+  link_to("Other reports for this host", host_reports_path(@report.host))
+%>

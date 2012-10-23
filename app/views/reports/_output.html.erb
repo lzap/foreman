@@ -1,11 +1,13 @@
-<table class="list" border=1>
-  <caption>Puppet Output</caption>
-  <th>Level</th><th>Resource</th><th>message</th>
+<table id='report_log' class="table table-bordered table-striped">
+  <tr>
+    <th>Level</th><th>Resource</th><th>message</th>
+  </tr>
   <% logs.each do |log| -%>
-    <tr class="<%= cycle("even", "odd") -%>">
-      <td><%= h log.level %></td>
-      <td><%= h log.source %></td>
-      <td><%= h log.message %></td>
-    </tr>
+      <tr>
+        <td><span <%= report_tag log.level %>><%= h log.level %></span></td>
+        <td><%= h log.source %></td>
+        <td><%= h log.message %></td>
+      </tr>
   <% end -%>
+  <tr id='ntsh' <%= "style='display: none;'" if logs.size > 0%>><td colspan="3"> Nothing to show </td></tr>
 </table>

@@ -1,18 +1,21 @@
 class DomainsController < ApplicationController
+  include Foreman::Controller::AutoCompleteSearch
   before_filter :find_by_name, :only => %w{show edit update destroy}
 
   def index
+    values = Domain.search_for(params[:search], :order => params[:order])
     respond_to do |format|
       format.html do
-        @search  = Domain.search params[:search]
-        @domains = @search.paginate :page => params[:page], :include => 'hosts'
+        @domains = values.paginate :page => params[:page]
+        @counter = Host.count(:group => :domain_id, :conditions => {:domain_id => @domains})
       end
-      format.json { render :json => Domain.all }
+      format.json { render :json => values }
     end
   end
 
   def new
     @domain = Domain.new
+    @domain.domain_parameters.build
   end
 
   def show
@@ -24,10 +27,9 @@ class DomainsController < ApplicationController
   def create
     @domain = Domain.new(params[:domain])
     if @domain.save
-      flash[:foreman_notice] = "Successfully created domain."
-      redirect_to domains_url
+      process_success
     else
-      render :action => 'new'
+      process_error
     end
   end
 
@@ -36,20 +38,18 @@ class DomainsController < ApplicationController
 
   def update
     if @domain.update_attributes(params[:domain])
-      flash[:foreman_notice] = "Successfully updated domain."
-      redirect_to domains_url
+      process_success
     else
-      render :action => 'edit'
+      process_error
     end
   end
 
   def destroy
     if @domain.destroy
-      flash[:foreman_notice] = "Successfully destroyed domain."
+      process_success
     else
-      flash[:foreman_error] = @domain.errors.full_messages.join("<br/>")
+      process_error
     end
-    redirect_to domains_url
   end
 
 end

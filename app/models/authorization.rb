@@ -28,14 +28,24 @@ module Authorization
     klass.gsub!(/authsource.*/, "authenticator")
     klass.gsub!(/commonparameter.*/, "global_variable")
     klasses = klass.pluralize
-    return true if User.current.allowed_to?("#{operation}_#{klasses}".to_sym)
+    return true if User.current and User.current.allowed_to?("#{operation}_#{klasses}".to_sym)
 
-    errors.add_to_base "You do not have permission to #{operation} this #{klass}"
+    errors.add :base, "You do not have permission to #{operation} this #{klass}"
+    @permission_failed = operation
     false
+  end
+
+  # @return false or name of failed operation
+  def permission_failed?
+    return false unless @permission_failed
+    @permission_failed
   end
 
   private
   def enforce?
-    not (defined?(Rake) or User.current.admin?)
+    return false if (User.current and User.current.admin?)
+    return true  if defined?(Rake) and Rails.env == "test"
+    return false if defined?(Rake)
+    true
   end
 end

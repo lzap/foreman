@@ -1,0 +1,23 @@
+<table class="table table-condensed" id="inherited_parameters">
+  <thead>
+  <tr>
+    <th class='span3'>Scope</th>
+    <th class='span2'>Name</th>
+    <th class='span7'>Value</th>
+    <th>Actions</th>
+  </tr>
+  </thead>
+  <tbody>
+  <% inherited_parameters.each do |name,value| -%>
+      <tr>
+        <%= "<td class='span2' rowspan='#{inherited_parameters.size}'>Global</td>".html_safe if name == inherited_parameters.first[0]%>
+        <td class='span2'><%= content_tag :span, name, :id=>"name_#{name}", :class => "span2" %></td>
+        <td class='span6'><%= parameter_value_field value%></td>
+        <td>
+        <%= link_to_function("override", "override_param(this)", :title => "Override this value",
+                             :'data-tag' => 'override', :class =>"btn btn-small" ) if authorized_via_my_scope("host_editing", "create_params") %>
+      </tr>
+  <% end -%>
+  </tbody>
+</table>
+

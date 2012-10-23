@@ -1,7 +1,15 @@
 class ModelsController < ApplicationController
+  include Foreman::Controller::AutoCompleteSearch
+
   def index
-    @search = Model.search params[:search]
-    @models = @search.paginate :page => params[:page]
+    values = Model.search_for(params[:search], :order => params[:order])
+    respond_to do |format|
+      format.html do
+        @models  = values.paginate :page => params[:page]
+        @counter = Host.count(:group => :model_id, :conditions => {:model_id => @models})
+      end
+      format.json { render :json => values }
+    end
   end
 
   def new
@@ -11,10 +19,9 @@ class ModelsController < ApplicationController
   def create
     @model = Model.new(params[:model])
     if @model.save
-      flash[:foreman_notice] = "Successfully created model."
-      redirect_to models_url
+      process_success
     else
-      render :action => 'new'
+      process_error
     end
   end
 
@@ -25,20 +32,18 @@ class ModelsController < ApplicationController
   def update
     @model = Model.find(params[:id])
     if @model.update_attributes(params[:model])
-      flash[:foreman_notice] = "Successfully updated model."
-      redirect_to models_url
+      process_success
     else
-      render :action => 'edit'
+      process_error
     end
   end
 
   def destroy
     @model = Model.find(params[:id])
     if @model.destroy
-      flash[:foreman_notice] = "Successfully destroyed model."
+      process_success
     else
-      flash[:foreman_error] = @model.errors.full_messages.join("<br/>")
+      process_error
     end
-    redirect_to models_url
   end
 end

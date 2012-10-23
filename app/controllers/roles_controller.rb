@@ -16,53 +16,51 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 class RolesController < ApplicationController
+  include Foreman::Controller::AutoCompleteSearch
   before_filter :require_admin
 
   def index
-    @search = Role.search(params[:search])
-    @roles = @search.paginate(:page => params[:page], :order => "builtin ASC, name ASC")
+    values = Role.search_for(params[:search], :order => params[:order])
+    respond_to do |format|
+      format.html { @roles = values.paginate :page => params[:page] }
+      format.json { render :json => values }
+    end
   end
 
   def new
     # Prefills the form with 'default user' role permissions
     @role        = Role.new({:permissions => Role.default_user.permissions})
-    @permissions = @role.setable_permissions
   end
 
   def create
     @role = Role.new(params[:role])
-    @permissions = @role.setable_permissions
     if @role.save
-      flash[:foreman_notice] = "#{@role.name} succcessfully created"
-      redirect_to roles_url
+      process_success
     else
-      render :action => 'new'
+      process_error
     end
   end
 
   def edit
     @role = Role.find(params[:id])
-    @permissions = @role.setable_permissions
   end
 
   def update
     @role = Role.find(params[:id])
     if @role.update_attributes(params[:role])
-      flash[:foreman_notice] = "#{@role.name} successfully updated"
-      redirect_to roles_url
+      process_success
     else
-      render :action => 'edit'
+      process_error
     end
   end
 
   def destroy
     @role = Role.find(params[:id])
     if @role.destroy
-      flash[:foreman_notice] = "Successfully destroyed role."
+      process_success
     else
-      flash[:foreman_error] = @role.errors.full_messages.join("<br/>")
+      process_error
     end
-    redirect_to roles_url
   end
 
   def report
@@ -73,7 +71,7 @@ class RolesController < ApplicationController
         role.permissions = params[:permissions][role.id.to_s]
         role.save
       end
-      flash[:foreman_notice] = "All non public permissions successfuly updated"
+      notice "All non public permissions successfuly updated"
       redirect_to roles_url
     end
   end

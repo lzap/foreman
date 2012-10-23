@@ -16,37 +16,30 @@ class HostParameterTest < ActiveSupport::TestCase
   end
 
   test "duplicate names cannot exist for a host" do
+    @host = hosts(:one)
     as_admin do
-      @host = Host.create! :name => "myfullhost", :mac => "aabbecddeeff", :ip => "123.05.02.03",
-                          :domain => domains(:mydomain) , :operatingsystem => Operatingsystem.first, :hostgroup => hostgroups(:common),
-                          :architecture => Architecture.first, :environment => Environment.first, :disk => "empty partition"
-
-      @parameter1 = HostParameter.create :name => "some parameter", :value => "value", :reference_id => @host.id
-      @parameter2 = HostParameter.create :name => "some parameter", :value => "value", :reference_id => @host.id
+      @parameter1 = HostParameter.create :name => "some_parameter", :value => "value", :reference_id => @host.id
+      @parameter2 = HostParameter.create :name => "some_parameter", :value => "value", :reference_id => @host.id
     end
     assert !@parameter2.valid?
     assert  @parameter2.errors.full_messages[0] == "Name has already been taken"
   end
 
   test "duplicate names can exist for different hosts" do
+    @host1 = hosts(:one)
+    @host2 = hosts(:two)
     as_admin do
-      @host1 = Host.create! :name => "myfullhost", :mac => "aabbecddeeff", :ip => "123.05.02.03",
-                            :domain => domains(:mydomain) , :operatingsystem => Operatingsystem.first, :hostgroup => hostgroups(:common),
-                            :architecture => Architecture.first, :environment => Environment.first, :disk => "empty partition"
-      @host2 = Host.create! :name => "anotherfullhost", :mac => "aabbecddee00", :ip => "123.05.02.04",
-                            :domain => domains(:mydomain) , :operatingsystem => Operatingsystem.first, :hostgroup => hostgroups(:common),
-                            :architecture => Architecture.first, :environment => Environment.first, :disk => "empty partition"
-      @parameter1 = HostParameter.create! :name => "some parameter", :value => "value", :reference_id => @host1.id
-      @parameter2 = HostParameter.create! :name => "some parameter", :value => "value", :reference_id => @host2.id
+      @parameter1 = HostParameter.create! :name => "some_parameter", :value => "value", :reference_id => @host1.id
+      @parameter2 = HostParameter.create! :name => "some_parameter", :value => "value", :reference_id => @host2.id
     end
     assert @parameter2.valid?
   end
 
-  def setup_user operation
+  def setup_user operation, type = "params"
     @one = users(:one)
     as_admin do
-      role = Role.find_or_create_by_name :name => "#{operation}_hosts"
-      role.permissions = ["#{operation}_hosts".to_sym]
+      role = Role.find_or_create_by_name :name => "#{operation}_#{type}"
+      role.permissions = ["#{operation}_#{type}".to_sym]
       @one.roles      = [role]
       @one.domains    = []
       @one.hostgroups = []
@@ -62,9 +55,9 @@ class HostParameterTest < ActiveSupport::TestCase
       @one.domains = [domains(:mydomain)]
       @one.save!
     end
-    record =  HostParameter.create :name => "dummy", :value => "value", :reference_id => hosts(:one).id
-    assert record.valid?
-    assert !record.new_record?
+    assert_nothing_raised do
+      HostParameter.create! :name => "dummy", :value => "value", :reference_id => hosts(:one).id
+    end
   end
 
   test "user with create permissions should not be able to create when not permitted" do
@@ -74,9 +67,9 @@ class HostParameterTest < ActiveSupport::TestCase
       @one.save!
       hosts(:one).update_attribute :hostgroup, hostgroups(:unusual)
     end
-    record =  HostParameter.create :name => "dummy", :value => "value", :reference_id => hosts(:one).id
+    record = HostParameter.create :name => "dummy", :value => "value", :reference_id => hosts(:one).id
     assert record.valid?
-    assert record.new_record?
+    assert !record.save
   end
 
   test "user with create permissions should be able to create when unconstrained" do
@@ -84,14 +77,14 @@ class HostParameterTest < ActiveSupport::TestCase
     as_admin do
       @one.domains = []
     end
-    record =  HostParameter.create :name => "dummy", :value => "value", :reference_id => hosts(:one).id
-    assert record.valid?
-    assert !record.new_record?
+    assert_nothing_raised do
+      HostParameter.create! :name => "dummy", :value => "value", :reference_id => hosts(:one).id
+    end
   end
 
   test "user with view permissions should not be able to create" do
-    setup_user "view"
-    record =  HostParameter.create :name => "dummy", :value => "value", :reference_id => hosts(:one).id
+    setup_user "view", "hosts"
+    record = HostParameter.create :name => "dummy", :value => "value", :reference_id => hosts(:one).id
     assert record.valid?
     assert record.new_record?
   end

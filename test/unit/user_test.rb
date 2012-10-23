@@ -84,7 +84,14 @@ class UserTest < ActiveSupport::TestCase
   end
   # couldn't continue testing the rest of login method cause use auth_source.authenticate, which is not implemented yet
 
-  test  "should not be able to delete the admin account" do
+  test "when a user login, his last login time should be updated" do
+    user = users(:internal)
+    last_login = user.last_login_on
+    assert_not_nil User.try_to_login(user.login, "changeme")
+    assert_not_equal last_login, User.find(user.id).last_login_on
+  end
+
+  test "should not be able to delete the admin account" do
     assert !User.find_by_login("admin").destroy
   end
 
@@ -133,18 +140,33 @@ class UserTest < ActiveSupport::TestCase
 
   test "user with edit permissions should be able to edit" do
     setup_user "edit"
-    record      =  User.first
+    record      = users(:one)
     record.login = "renamed"
     assert record.save
   end
 
   test "user with destroy permissions should not be able to edit" do
     setup_user "destroy"
-    record      =  User.first
+    record      =  users(:one)
     record.login = "renamed"
     assert !record.save
     assert record.valid?
   end
 
-end
+  test "should not be able to rename the admin account" do
+    u = User.find_by_login("admin")
+    u.login = "root"
+    assert !u.save
+  end
 
+  test "email domains with a single word should be allowed" do
+    u = User.new :auth_source => auth_sources(:one), :login => "root", :mail => "foo@localhost"
+    assert u.save
+  end
+
+  test "email with whitespaces should be stripped" do
+    u = User.create! :auth_source => auth_sources(:one), :login => "boo", :mail => "b oo@localhost "
+    assert_equal u.mail, "boo@localhost"
+  end
+
+end

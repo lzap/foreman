@@ -1,12 +1,18 @@
-<div class="box tabular">
-  <% for association in associations -%>
-    <% content_tag_for :label, association, :class=>"floating" do %>
-      <%= check_box_tag(
-        "#{klass.class.to_s.downcase}[#{association.class.to_s.downcase}_ids][]",
-        association.id, klass.send(association.class.table_name).map(&:id).include?(association.id))
-      %>
-      <%= contract association %>
-      <%= hidden_field_tag "#{klass.class.to_s.downcase}[#{association.class.to_s.downcase}_ids][]" %>
+<ul class="inputs-list">
+  <% if associations.empty? -%>
+    <strong>None Found</strong>
+  <% else -%>
+    <% associations.sort{|a,b| a.to_s <=> b.to_s}.each do |association| -%>
+      <li>
+      <%= content_tag_for :label, association do %>
+        <%= check_box_tag(
+          "#{prefix || klass.class.table_name.singularize}[#{ActiveModel::Naming.singular(association)}_ids][]",
+          association.id, klass.send(association.class.table_name).map(&:id).include?(association.id))
+        %>
+        <%= contract association %>
+        <%= hidden_field_tag "#{prefix || klass.class.table_name.singularize}[#{ActiveModel::Naming.singular(association)}_ids][]" %>
+      <% end -%>
+      </li>
     <% end -%>
   <% end -%>
-</div>
+</ul>

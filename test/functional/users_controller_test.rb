@@ -24,15 +24,15 @@ class UsersControllerTest < ActionController::TestCase
     assert_redirected_to users_path
   end
 
-  test "should not remove the anonymous role" do
+  def test_one #"should not remove the anonymous role" do
     user = User.create :login => "foo", :mail => "foo@bar.com", :auth_source => auth_sources(:one)
 
-    assert user.roles = [roles :anonymous]
+    assert user.roles =([roles(:anonymous)])
 
     put :update, { :commit => "Submit", :id => user.id, :user => {:login => "johnsmith"} }, set_session_user
     mod_user = User.find_by_id(user.id)
 
-    assert mod_user.roles = [roles :anonymous]
+    assert mod_user.roles =([roles(:anonymous)])
   end
 
   test "should set password" do
@@ -81,7 +81,7 @@ class UsersControllerTest < ActionController::TestCase
 
   test "should delete different user" do
     user = users(:one)
-    delete :destroy, {:id => user}, {:user => users(:admin)}
+    delete :destroy, {:id => user}, set_session_user.merge(:user => users(:admin))
     assert_redirected_to users_url
     assert !User.exists?(user.id)
   end
@@ -91,16 +91,16 @@ class UsersControllerTest < ActionController::TestCase
     @request.env['HTTP_REFERER'] = users_path
     user = users(:one)
     user.update_attribute :admin, true
-    delete :destroy, {:id => user.id}, {:user => user.id}
+    delete :destroy, {:id => user.id}, set_session_user.merge(:user => user.id)
     assert_redirected_to users_url
     assert User.exists?(user)
-    assert @response.flash[:foreman_notice] == "You are currently logged in, suicidal?"
+    assert @request.flash[:notice] == "You are currently logged in, suicidal?"
   end
 
   test "should recreate the admin account" do
     return true unless SETTINGS[:login]
     return true unless SETTINGS[:login] == false
-    User.find_by_login("admin").delete # Of course we only use destroy in the codebase
+    User.admin.delete # Of course we only use destroy in the codebase
     assert User.find_by_login("admin").nil?
     get :index, {}, {:user => nil}
     assert !User.find_by_login("admin").nil?
@@ -110,6 +110,7 @@ class UsersControllerTest < ActionController::TestCase
     User.current = users :admin
     user = User.find_by_login("one")
     @request.session[:user] = user.id
+    @request.session[:expires_at] = 5.minutes.from_now
     user.roles = [Role.find_by_name('Anonymous'), Role.find_by_name('Viewer')]
     user.save!
   end
@@ -117,7 +118,7 @@ class UsersControllerTest < ActionController::TestCase
   test 'user with viewer rights should fail to edit a user' do
     setup_users
     get :edit, {:id => User.first.id}
-    assert @response.status == '403 Forbidden'
+    assert_equal @response.status, 403
   end
 
   test 'user with viewer rights should succeed in viewing users' do

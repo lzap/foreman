@@ -1,16 +1,8 @@
-<% form_for @ptable do |f| %>
-  <%= f.error_messages %>
-  <p>
-  <%= f.label :name %><br />
-  <%= f.text_field :name %>
-  </p>
-  <p>
-  <%= f.label :layout %><br />
-  <%= f.text_area :layout, :size => "80x20" %>
-  </p>
-  <p>
-  <%= authorized_edit_habtm @ptable, Operatingsystem %>
-  </p>
-  <br/>
-  <p><%= f.submit "Submit" %></p>
+<%= form_for @ptable do |f| %>
+  <%= base_errors_for @ptable %>
+  <%= text_f f, :name %>
+  <%= textarea_f f, :layout, :class => "input-xxlarge",
+    :help_block => "<span class='label label-info'>Notice</span> you may use #{link_to 'a script as well', 'http://theforeman.org/projects/foreman/wiki/Dynamic_disk_partitioning', :rel => 'external'}".html_safe %>
+  <%= selectable_f f, :os_family, Operatingsystem.families, { :include_blank => true }, { :label => "Operating System Family" } %>
+  <%= submit_or_cancel f %>
 <% end %>

@@ -1,43 +1,38 @@
-<% form_for :operatingsystem, :url => family_url(@operatingsystem), :html => {:method => family_html_method } do |f| %>
-  <%= f.error_messages %>
-  <table>
-    <tr>
-      <td> Name</td>
-      <td> <%= f.text_field :name, :size => "12" %> </td>
-      <td> Major</td>
-      <td> <%= f.text_field :major, :size => 8 %> </td>
-      <td> Minor</td>
-      <td> <%= f.text_field :minor, :size => 8 %></td>
-      <td> OS Family</td>
-      <td> <%= f.collection_select :family, Operatingsystem.families_as_collection, :value, :name, {:include_blank => "Choose a family"}%></td>
-      <td id="release_name"  colspan="3" <%= 'style="display:none;"' unless @operatingsystem.family == "Debian" -%> >
-        Release name
-        <%= f.text_field :release_name, :size => 12%>
-        <small>e.g. karmic, lucid, etch, woody</small>
-      </td>
-    </tr>
-  </table>
-  </p>
-  <p>
-  <% field_set_tag("Architecture") do %>
-    <%= authorized_edit_habtm @operatingsystem, Architecture %>
-  <% end -%>
-  </p>
-  <p>
-  <% field_set_tag("Partition tables") do %>
-    <%= authorized_edit_habtm @operatingsystem, Ptable %>
-  <% end -%>
-  </p>
-  <p>
-  <% field_set_tag("Installation Medias") do %>
-    <%= authorized_edit_habtm @operatingsystem, Media %>
-  <% end -%>
-  </p>
+<%= form_for @operatingsystem do |f| %>
+  <%= base_errors_for @operatingsystem %>
+  <ul class="nav nav-tabs" data-tabs="tabs">
+    <li class="active"><a href="#primary" data-toggle="tab">Operating System</a></li>
+    <li><a href="#params" data-toggle="tab">Parameters</a></li>
+    <% if SETTINGS[:unattended] -%>
+      <li><a href="#templates" data-toggle="tab">Templates</a></li>
+    <% end -%>
+  </ul>
 
-  <% unless @operatingsystem.new_record? -%>
-    <p>Currently used by <%= @operatingsystem.hosts.count %> hosts</p>
-  <% end -%>
+  <div class="tab-content">
 
-  <p><%= f.submit "Submit" %></p>
+    <div class="tab-pane active" id="primary">
+
+      <%= text_f f, :name, :help_inline => "e.g. RedHat" %>
+      <%= text_f f, :major, :help_inline => "e.g. 6", :class => "input-small" %>
+      <%= text_f f, :minor, :help_inline => "e.g. 2", :class => "input-small" %>
+      <%= select_f f, :family, Operatingsystem.families_as_collection, :value, :name, { :include_blank => "Choose a family"},
+        { :label => "OS Family", :help_inline => "The Operating System type", :onchange => 'show_release(this);'}
+      %>
+      <div id="release_name" <%= display?(!@operatingsystem.use_release_name?) %>>
+        <%= text_f f, :release_name, :help_inline => "e.g. karmic, lucid, hw0910 etc" %>
+      </div>
+
+      <%= multiple_checkboxes f, :architectures, @operatingsystem, Architecture %>
+      <%= multiple_checkboxes f, :ptables, @operatingsystem, os_habtm_family(Ptable, f.object), :label => "Partition tables" %>
+      <%= multiple_checkboxes f, :media, @operatingsystem,   os_habtm_family(Medium, f.object), :label => "Installation media" %>
+    </div>
+
+    <%= render('template_defaults', :f => f) if SETTINGS[:unattended] -%>
+
+    <div class="tab-pane" id="params">
+      <%= render "common_parameters/parameters", { :f => f, :type => :os_parameters } %>
+    </div>
+  </div>
+
+  <%= submit_or_cancel f %>
 <% end %>
-<%= observe_field "operatingsystem_family", :function => show_release %>

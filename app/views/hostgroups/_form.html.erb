@@ -1,14 +1,58 @@
-<% form_for @hostgroup do |f| %>
-  <%= f.error_messages %>
-  <p>
-  <%= f.label :name %><br />
-  <%= f.text_field :name %>
-  </p>
+<%= javascript 'host_edit' %>
+<%= form_for @hostgroup do |f| %>
+  <%= base_errors_for @hostgroup %>
 
+  <ul class="nav nav-tabs" data-tabs="tabs">
+    <li class="active"><a href="#primary" data-toggle="tab">Hostgroup</a></li>
+    <li><a href="#puppet_klasses" data-toggle="tab">Puppet Classes</a></li>
+    <% if SETTINGS[:unattended] -%>
+      <li><a href="#network" data-toggle="tab">Network</a></li>
+      <li><a href="#os" data-toggle="tab">Operating System</a></li>
+      <% if !Hypervisor.first.nil? and authorized_for("Hypervisors::Guests", :create) -%>
+        <li><a href="#virtual_machine" data-toggle="tab">Virtual Machine</a></li>
+      <% end -%>
+    <% end -%>
+    <li><a href="#params" data-toggle="tab">Parameters</a></li>
+  </ul>
 
-  <%= render 'puppetclasses/class_selection', :obj => @hostgroup %>
+  <div class="tab-content">
 
-  <%= render :partial => "common_parameters/parameters", :locals => { :f => f, :type => :group_parameters } %>
+    <div class="tab-pane active" id="primary">
+      <%= select_f f, :parent_id, accessible_hostgroups, :id, :to_label, {:include_blank => true}, {
+                      :onchange => 'hostgroup_changed(this);', :'data-url'=> process_hostgroup_hosts_path,
+                      :help_inline => image_tag('spinner.gif', :id => 'hostgroup_indicator', :class => 'hide').html_safe } %>
+      <%= text_f f, :name %>
+      <%= select_f f, :environment_id, Environment.all, :id, :to_label, {:include_blank => true},
+                   {:onchange => 'update_puppetclasses(this);', :"data-url" => environment_selected_hostgroups_path} %>
 
-  <p><%= f.submit "Submit" %></p>
+      <%= puppet_master_fields f %>
+    </div>
+
+    <div class="tab-pane" id="puppet_klasses">
+      <% if @environment or @hostgroup.environment -%>
+        <%= render 'puppetclasses/class_selection', :obj => @hostgroup %>
+      <% else -%>
+        <p class="alert alert-message">Please select an Environment first</p>
+      <% end -%>
+    </div>
+
+    <div class="tab-pane" id="network">
+      <%= render 'common/domain_subnet', :item => @hostgroup %>
+    </div>
+
+    <div class="tab-pane" id="os">
+      <%= render "common/os_selection/initial", :item=> @hostgroup %>
+      <%= password_f f, :root_pass, :label => "Root Password" %>
+    </div>
+
+    <div class="tab-pane" id="virtual_machine">
+      <%= render('common/hypervisor', :item => @hostgroup) %>
+    </div>
+
+    <div class="tab-pane" id="params">
+      <%= render "common_parameters/parameters", { :f => f, :type => :group_parameters } %>
+    </div>
+  </div>
+
+  <%= submit_or_cancel f %>
 <% end %>

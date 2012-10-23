@@ -1,13 +1,12 @@
 class ArchitecturesController < ApplicationController
+  include Foreman::Controller::AutoCompleteSearch
   before_filter :find_by_name, :only => %w{show edit update destroy}
 
   def index
+    values = Architecture.search_for(params[:search], :order => params[:order])
     respond_to do |format|
-      format.html do
-        @search        = Architecture.search(params[:search])
-        @architectures = @search.paginate(:page => params[:page], :include => :operatingsystems)
-      end
-      format.json { render :json => Architecture.all }
+      format.html { @architectures = values.paginate(:page => params[:page], :include => :operatingsystems) }
+      format.json { render :json => values }
     end
   end
 
@@ -24,10 +23,9 @@ class ArchitecturesController < ApplicationController
   def create
     @architecture = Architecture.new(params[:architecture])
     if @architecture.save
-      flash[:notice] = "Successfully created architecture."
-      redirect_to architectures_url
+      process_success
     else
-      render :action => 'new'
+      process_error
     end
   end
 
@@ -36,17 +34,18 @@ class ArchitecturesController < ApplicationController
 
   def update
     if @architecture.update_attributes(params[:architecture])
-      flash[:notice] = "Successfully updated architecture."
-      redirect_to architectures_url
+      process_success
     else
-      render :action => 'edit'
+      process_error
     end
   end
 
   def destroy
-    @architecture.destroy
-    flash[:notice] = "Successfully destroyed architecture."
-    redirect_to architectures_url
+    if @architecture.destroy
+      process_success
+    else
+      process_error
+    end
   end
 
 end

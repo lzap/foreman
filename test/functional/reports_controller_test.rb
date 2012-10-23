@@ -2,7 +2,7 @@ require 'test_helper'
 
 class ReportsControllerTest < ActionController::TestCase
   setup do
-    User.current = User.find_by_login "admin"
+    User.current = User.admin
   end
   def test_index
     get :index, {}, set_session_user
@@ -11,24 +11,47 @@ class ReportsControllerTest < ActionController::TestCase
     assert_template 'index'
   end
 
+  def test_index_via_json
+    get :index, {:format => "json"}, set_session_user
+    assert_response :success
+    reports = ActiveSupport::JSON.decode(@response.body)
+    assert !reports.empty?
+  end
+
   def test_show
     get :show, {:id => Report.last.id}, set_session_user
     assert_template 'show'
   end
 
+  def test_show_last
+    get :show, {:id => "last"}, set_session_user
+    assert_template 'show'
+  end
+
+  def test_show_last_report_for_host
+    get :show, {:id => "last", :host_id => Report.first.host.to_param}, set_session_user
+    assert_template 'show'
+  end
+
+  def test_render_404_when_invalid_report_for_a_host_is_requested
+    get :show, {:id => "last", :host_id => "blalala.domain.com"}, set_session_user
+    assert_response :missing
+    assert_template 'common/404'
+  end
+
   def test_create_duplicate
     create_a_puppet_transaction_report
     User.current = nil
-    post :create, {:report => @log}
+    post :create, {:report => @log, :format => "yml"}
     assert_response :success
-    post :create, {:report => @log}
+    post :create, {:report => @log, :format => "yml"}
     assert_response :error
   end
 
   def test_create_valid
     create_a_puppet_transaction_report
     User.current = nil
-    post :create, {:report => @log}
+    post :create, {:report => @log, :format => "yml"}
     assert_response :success
   end
 
@@ -73,15 +96,9 @@ class ReportsControllerTest < ActionController::TestCase
     users(:one).roles       = [Role.find_by_name('Anonymous'), Role.find_by_name('Viewer')]
   end
 
-  test 'user with viewer rights should fail to edit a report' do
-    user_setup
-    get :edit, {:id => Report.first.id}
-    assert @response.status == '403 Forbidden'
-  end
-
   test 'user with viewer rights should succeed in viewing reports' do
     user_setup
-    get :index
+    get :index, {}, set_session_user
     assert_response :success
   end
 end

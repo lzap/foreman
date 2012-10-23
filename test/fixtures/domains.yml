@@ -2,12 +2,17 @@
 
 mydomain:
   name: mydomain.net
-  fullname: somewhere in mydomain
+  dns: three
 
 yourdomain:
   name: yourdomain.net
   fullname: somewhere in yourdomain
+  dns: three
 
 unuseddomain:
   name: unused.net
   fullname: somewhare that is never used
+  dns: three
+
+useless:
+  name: useless.net

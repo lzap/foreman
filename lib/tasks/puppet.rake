@@ -55,64 +55,88 @@ namespace :puppet do
     end
   end
   namespace :import do
-    desc "Update puppet environments and classes. Optional batch flag triggers run with no prompting"
+    desc "
+    Update puppet environments and classes. Optional batch flag triggers run with no prompting\nUse proxy=<proxy name> to import from or get the first one by default"
     task :puppet_classes,  [:batch] => :environment do | t, args |
       args.batch = args.batch == "true"
-      # Evalute any changes that exist between the database of environments and puppetclasses and
+
+      proxies = SmartProxy.puppet_proxies
+      if proxies.empty?
+        puts "ERROR: We did not find at least one configured Smart Proxy with the Puppet feature"
+        exit 1
+      end
+      if ENV["proxy"]
+        proxy = proxies.select{|p| p.name == ENV["proxy"]}.first
+        unless proxy.is_a?(SmartProxy)
+          puts "Smart Proxies #{ENV["proxy"]} was not found, aborting"
+          exit 1
+        end
+      end
+      proxy ||= proxies.first
+      # Evaluate any changes that exist between the database of environments and puppetclasses and
       # the on-disk puppet installation
       begin
         puts "Evaluating possible changes to your installation" unless args.batch
-        changes = Environment.importClasses
+        changes = Environment.importClasses proxy.id
       rescue => e
-        unless args.batch
+        if args.batch
+          Rails.logger.error "Failed to refresh puppet classes: #{e}"
+        else
           puts "Problems were detected during the evaluation phase"
           puts
           puts e.message.gsub(/<br\/>/, "\n") + "\n"
           puts
           puts "Please fix these issues and try again"
-        else
-          Rails.logger "Failed to refresh puppet classes:" + e.message
         end
-        exit
+        exit 1
       end
 
-      unless changes[:new][:environments].empty?      and changes[:new][:puppetclasses].empty? and
-             changes[:obsolete][:environments].empty? and changes[:obsolete][:puppetclasses].empty?
+      if changes["new"].empty? and changes["obsolete"].empty?
+        puts "No changes detected" unless args.batch
+      else
         unless args.batch
           puts "Scheduled changes to your environment"
-          puts "New      environments  : " + changes[:new][:environments].to_sentence
-          puts "Obsolete environments  : " + changes[:obsolete][:environments].to_sentence
-          puts "New      puppetclasses : " + changes[:new][:puppetclasses].to_sentence
-          puts "Obsolete puppetclasses : " + changes[:obsolete][:puppetclasses].to_sentence
+          puts "Create/update environments"
+          for env, classes in changes["new"]
+            print "%-15s: %s\n" % [env, classes.to_sentence]
+          end
+          puts "Delete environments"
+          for env, classes in changes["obsolete"]
+            if classes.include? "_destroy_"
+              print "%-15s: %s\n" % [env, "Remove environment"]
+            else
+              print "%-15s: %s\n" % [env, classes.to_sentence]
+            end
+          end
           puts
           print "Proceed with these modifications? <yes|no> "
           response = $stdin.gets
 
-          exit unless response =~ /^yes/
+          exit(0) unless response =~ /^yes/
         end
 
         errors = ""
         # Apply the filtered changes to the database
         begin
-          errors = Environment.obsolete_and_new changes
-        rescue e
-          errors = e.message + "\n"
+          changed = { :new => changes["new"], :obsolete => changes["obsolete"] }
+          [:new, :obsolete].each { |kind| changed[kind].each_key { |k| changes[kind.to_s][k] = changes[kind.to_s][k].inspect } }
+          errors = Environment.obsolete_and_new(changed)
+        rescue => e
+          errors = e.message + "\n" + e.backtrace.join("\n")
         end
         unless args.batch
           unless errors.empty?
             puts "Problems were detected during the execution phase"
             puts
-            puts errors.gsub(/<br\/>/, "\n") + "\n"
+            puts errors.each { |e| e.gsub(/<br\/>/, "\n") } << "\n"
             puts
             puts "Import failed"
           else
             puts "Import complete"
           end
         else
-          Rails.logger "Failed to refresh puppet classes:" + errors
+          Rails.logger.warn "Failed to refresh puppet classes: #{errors}"
         end
-      else
-        puts "No changes detected" unless args.batch
       end
     end
   end

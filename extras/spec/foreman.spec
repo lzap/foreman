@@ -2,14 +2,14 @@
 %global confdir extras/spec
 
 Name:           foreman
-Version:        0.1.6
-Release:        rc2%{?dist}
+Version:        0.4.1
+Release:        0.1
 Summary:        Systems Management web application
 
 Group:          Applications/System
 License:        GPLv3+
 URL:            http://theforeman.org
-Source0:        http://github.com/ohadlevy/%{name}/tarball/%{name}-0.1-6.tar.bz2
+Source0:        http://github.com/ohadlevy/%{name}/tarball/%{name}-%{version}.tar.bz2
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 BuildArch:      noarch
@@ -19,13 +19,13 @@ Requires:       rubygems
 Requires:       rubygem(rake) >= 0.8.3
 Requires:       puppet >= 0.24.4
 Requires:       rubygem(sqlite3-ruby)
+Requires:       rubygem(rest-client)
+Requires:       rubygem(json)
 Requires(pre):  shadow-utils
 Requires(post): chkconfig
 Requires(preun): chkconfig
 Requires(preun): initscripts
 Requires(postun): initscripts
-
-Packager:       Ohad Levy <ohadlevy@gmail.com>
 
 %description
 Foreman is aimed to be a Single Address For All Machines Life Cycle Management.
@@ -116,6 +116,7 @@ datadir=%{_datadir}/%{name}
 varlibdir=%{_localstatedir}/lib/%{name}
 # remove all active_scaffold left overs
 find $datadir -type d -name "active_scaffold*" 2>/dev/null | xargs rm -rf
+rm -f $datadir/public/javascripts/all.js 2>/dev/null
 
 if [ ! -d $varlibdir/db -a -d $datadir/db -a ! -L $datadir/db ]; then
   [ -d $varlibdir ] || mkdir -p $varlibdir
@@ -163,6 +164,56 @@ if [ $1 -ge 1 ] ; then
 fi
 
 %changelog
+* Mon Dec 26 2011 ohadlevy@gmail.com - 0.4.1
+- rebuilt
+* Thu Nov 08 2011 ohadlevy@gmail.com - 0.4
+- rebuilt
+* Thu Nov 07 2011 ohadlevy@gmail.com - 0.4rc5
+- rebuilt
+* Thu Oct 25 2011 ohadlevy@gmail.com - 0.4rc4
+- rebuilt
+* Thu Oct 18 2011 ohadlevy@gmail.com - 0.4rc3
+- rebuilt
+* Sat Sep 28 2011 ohadlevy@gmail.com - 0.4rc2
+- rebuilt
+* Sat Sep 10 2011 ohadlevy@gmail.com - 0.4rc1
+- rebuilt
+
+* Tue Jun 07 2011 ohadlevy@gmail.com - 0.3
+- rebuilt
+
+* Tue May 24 2011 ohadlevy@gmail.com - 0.3rc1-2
+- rebuilt
+
+* Thu May 05 2011 ohadlevy@gmail.com - 0.3rc1
+- rebuilt
+
+* Tue Mar 29 2011 ohadlevy@gmail.com - 0.2
+- Version bump to 0.2
+
+* Tue Mar 22 2011 ohadlevy@gmail.com - 0.2-rc1
+- rebuilt
+
+* Thu Feb 24 2011 ohadlevy@gmail.com - 0.1.7-rc5
+- rebuilt
+
+* Sat Feb 12 2011 ohadlevy@gmail.com - 0.1.7-rc4.1
+- rebuilt
+* Mon Jan 31 2011 ohadlevy@gmail.com - 0.1.7-rc3.1
+- rebuilt
+* Tue Jan 18 2011 ohadlevy@gmail.com - 0.1.7-rc2.1
+- rebuilt
+
+* Sat Jan 15 2011 ohadlevy@gmail.com - 0.1.7-rc2
+- rebuilt
+
+* Fri Dec 17 2010 ohadlevy@gmail.com - 0.1.7rc1
+- rebuilt
+
+* Mon Nov 29 2010 ohadlevy@gmail.com - 0.1.6-3
+- rebuilt
+* Thu Nov 12 2010 Ohad Levy <ohadlevy@gmail.com> - 0.1.6-1
+- Included fix for #461, as without it newly installed instances are not usable
 * Thu Nov 11 2010 Ohad Levy <ohadlevy@gmail.com> - 0.1.6
 - New upstream version
 * Sun Oct 30 2010 Ohad Levy <ohadlevy@gmail.com> - 0.1.6rc2

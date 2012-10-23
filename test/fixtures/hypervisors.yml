@@ -1,0 +1,5 @@
+one:
+  name: kvm
+  uri: qemu:///system
+  kind: libvirtd
+  id: 123
