@@ -3,11 +3,30 @@ module UsersHelper
     time_ago_in_words(record.last_login_on.getlocal) + " ago" if record.last_login_on
   end
 
-  def admin_column record
-    image_tag("true.png", :size => "18x18") if record.admin
-  end
-
   def auth_source_column record
     record.auth_source.to_label if record.auth_source
   end
+
+  def contracted_host_list user
+    content_tag(:span, :id => "contracted_host_list", :style => "display:inline;") do
+      if user.hosts.size > 20
+        link_to_function("#{user.hosts[0..20].join(", ")}...") do |page|
+          page[:contracted_host_list].hide
+          page[:expanded_host_list].show
+        end
+      else
+        content_tag(:span, user.hosts.to_sentence)
+      end
+    end
+  end
+
+  def expanded_host_list user
+    content_tag(:span, :id => "expanded_host_list", :style => "display:none;") do
+      link_to_function(user.hosts.to_sentence) do |page|
+        page[:contracted_host_list].show
+        page[:expanded_host_list].hide
+      end
+    end
+  end
+
 end

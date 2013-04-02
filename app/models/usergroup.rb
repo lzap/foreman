@@ -1,14 +1,19 @@
 class Usergroup < ActiveRecord::Base
   include Authorization
-  has_many_polymorphs :members, :from => [:usergroups, :users ], :as => :member,
-    :through => :usergroup_member, :foreign_key => :usergroup_id, :dependent => :destroy
+
+  has_many :usergroup_members, :dependent => :destroy
+  has_many :users,      :through => :usergroup_members, :source => :member, :source_type => 'User'
+  has_many :usergroups, :through => :usergroup_members, :source => :member, :source_type => 'Usergroup'
 
   has_many :hosts, :as => :owner
   validates_uniqueness_of :name
-  before_destroy Ensure_not_used_by.new(:hosts, :usergroups)
+  before_destroy EnsureNotUsedBy.new(:hosts, :usergroups)
 
   # The text item to see in a select dropdown menu
   alias_attribute :select_title, :to_s
+  default_scope :order => 'LOWER(usergroups.name)'
+  scoped_search :on => :name, :complete_value => :true
+  validate :ensure_uniq_name
 
   # This methods retrieves all user addresses in a usergroup
   # Returns: Array of strings representing the user's email addresses
@@ -30,6 +35,10 @@ class Usergroup < ActiveRecord::Base
     group_list.sort.uniq
   end
 
+  def as_json(options={})
+    super({:only => [:name, :id]})
+  end
+
   protected
   # Recurses down the tree of usergroups and finds the users
   # [+group_list+]: Array of Usergroups that have already been processed
@@ -45,10 +54,8 @@ class Usergroup < ActiveRecord::Base
     user_list.concat users
   end
 
-  def validate
-    if User.all.map(&:login).include?(self.name)
-      errors.add :name, "is already used by a user account"
-    end
+  def ensure_uniq_name
+    errors.add :name, _("is already used by a user account") if User.where(:login => name).first
   end
 
 end

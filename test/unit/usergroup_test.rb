@@ -48,40 +48,43 @@ class UsergroupTest < ActiveSupport::TestCase
 
   test "hosts should be retrieved from recursive/complex usergroup definitions" do
     populate_usergroups
-    domain = Domain.find_or_create_by_name("someware.com")
+    domain = domains(:mydomain)
+    disable_orchestration
 
-    Host.with_options :architecture => Architecture.first, :environment => Environment.first, :operatingsystem => Operatingsystem.first, :ptable => Ptable.first do |object|
-      @h1 = object.find_or_create_by_name :name => "h1.someware.com", :ip => "192.168.3.1", :mac => "223344556601", :owner => @u1, :domain => domain
-      @h2 = object.find_or_create_by_name :name => "h2.someware.com", :ip => "192.168.3.2", :mac => "223344556602", :owner => @ug2, :domain => domain
-      @h3 = object.find_or_create_by_name :name => "h3.someware.com", :ip => "192.168.3.3", :mac => "223344556603", :owner => @u3, :domain => domain
-      @h4 = object.find_or_create_by_name :name => "h4.someware.com", :ip => "192.168.3.4", :mac => "223344556604", :owner => @ug5, :domain => domain
-      @h5 = object.find_or_create_by_name :name => "h5.someware.com", :ip => "192.168.3.5", :mac => "223344556605", :owner => @u2, :domain => domain
-      @h6 = object.find_or_create_by_name :name => "h6.someware.com", :ip => "192.168.3.6", :mac => "223344556606", :owner => @ug3, :domain => domain
+    Host.with_options :architecture => architectures(:x86_64), :environment => environments(:production), :operatingsystem => operatingsystems(:redhat),
+                      :ptable => ptables(:one), :subnet => subnets(:one), :puppet_proxy => smart_proxies(:puppetmaster) do |object|
+      @h1 = object.find_or_create_by_name :name => "h1.someware.com", :ip => "2.3.4.10", :mac => "223344556601", :owner => @u1, :domain => domain
+      @h2 = object.find_or_create_by_name :name => "h2.someware.com", :ip => "2.3.4.11", :mac => "223344556602", :owner => @ug2, :domain => domain
+      @h3 = object.find_or_create_by_name :name => "h3.someware.com", :ip => "2.3.4.12", :mac => "223344556603", :owner => @u3, :domain => domain
+      @h4 = object.find_or_create_by_name :name => "h4.someware.com", :ip => "2.3.4.13", :mac => "223344556604", :owner => @ug5, :domain => domain
+      @h5 = object.find_or_create_by_name :name => "h5.someware.com", :ip => "2.3.4.14", :mac => "223344556605", :owner => @u2, :domain => domain
+      @h6 = object.find_or_create_by_name :name => "h6.someware.com", :ip => "2.3.4.15", :mac => "223344556606", :owner => @ug3, :domain => domain
     end
-    assert @u1.hosts.sort == [@h1]
-    assert @u2.hosts.sort == [@h2, @h5]
-    assert @u3.hosts.sort == [@h2, @h3, @h6]
-    assert @u4.hosts.sort == [@h6]
-    assert @u5.hosts.sort == [@h2, @h4, @h6]
-    assert @u6.hosts.sort == []
+    assert_equal @u1.hosts.sort, [@h1]
+    assert_equal @u2.hosts.sort, [@h2, @h5]
+    assert_equal @u3.hosts.sort, [@h2, @h3, @h6]
+    assert_equal @u4.hosts.sort, [@h6]
+    assert_equal @u5.hosts.sort, [@h2, @h4, @h6]
+    assert_equal @u6.hosts.sort, []
   end
 
   test "addresses should be retrieved from recursive/complex usergroup definitions" do
     populate_usergroups
 
-    assert @ug1.recipients.sort == %w{u1@someware.com u2@someware.com}
-    assert @ug2.recipients.sort == %w{u2@someware.com u3@someware.com}
-    assert @ug3.recipients.sort == %w{u1@someware.com u2@someware.com u3@someware.com u4@someware.com}
-    assert @ug4.recipients.sort == %w{u1@someware.com u2@someware.com u3@someware.com}
-    assert @ug5.recipients.sort == %w{u1@someware.com u2@someware.com u3@someware.com u4@someware.com u5@someware.com}
+    assert_equal @ug1.recipients.sort, %w{u1@someware.com u2@someware.com}
+    assert_equal @ug2.recipients.sort, %w{u2@someware.com u3@someware.com}
+    assert_equal @ug3.recipients.sort, %w{u1@someware.com u2@someware.com u3@someware.com u4@someware.com}
+    assert_equal @ug4.recipients.sort, %w{u1@someware.com u2@someware.com u3@someware.com}
+    assert_equal @ug5.recipients.sort, %w{u1@someware.com u2@someware.com u3@someware.com u4@someware.com u5@someware.com}
   end
 
   test "cannot be destroyed when in use by a host" do
+    disable_orchestration
     @ug1 = Usergroup.find_or_create_by_name :name => "ug1"
-    @h1  = Host.find_or_create_by_name :name => "h1.someware.com", :ip => "192.168.3.1", :mac => "223344556601", :owner => @ug1, :architecture => Architecture.first, :domain => Domain.find_or_create_by_name("someware.com"),
-      :environment => Environment.first, :operatingsystem => Operatingsystem.first, :ptable => Ptable.first
+    @h1  = hosts(:one)
+    @h1.update_attributes :owner => @ug1
     @ug1.destroy
-    assert @ug1.errors.full_messages[0] == "ug1 is used by h1.someware.com"
+    assert_equal @ug1.errors.full_messages[0], "ug1 is used by #{@h1}"
   end
 
   test "cannot be destroyed when in use by another usergroup" do

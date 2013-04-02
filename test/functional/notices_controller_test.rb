@@ -2,6 +2,7 @@ require 'test_helper'
 
 class NoticesControllerTest < ActionController::TestCase
   def setup
+    User.current = User.admin
     @notice = Notice.create :global => false, :content => "hello", :level => "message"
     @request.env['HTTP_REFERER'] = hosts_path
   end
@@ -18,7 +19,7 @@ class NoticesControllerTest < ActionController::TestCase
     if set_session_user[:user]
       user = User.find  set_session_user[:user]
     else
-      user  = User.find_by_login("admin")
+      user  = User.admin
     end
     original = user.notices.count
     delete :destroy, {:id => @notice.id}, set_session_user
@@ -28,7 +29,7 @@ class NoticesControllerTest < ActionController::TestCase
 
   def test_notice_is_finally_deleted
     for user in User.all do
-      delete :destroy, {:id => @notice.id}, {:user => user.id}
+      delete :destroy, {:id => @notice.id}, set_session_user.merge(:user => user.id)
     end
     assert Notice.count == 0
   end

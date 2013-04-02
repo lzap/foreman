@@ -1,31 +1,31 @@
-<% title "Users" %>
+<% title _("Users") %>
 
-<table class="list">
+<% title_actions  display_link_if_authorized(_("New User"), hash_for_new_user_path) %>
+
+<table class="table table-bordered table-striped table-condensed">
   <tr>
-    <th><%= order @search, :by => :login %></th>
-    <th><%= order @search, :by => :firstname %></th>
-    <th><%= order @search, :by => :lastname %></th>
-    <th>Mail</th>
-    <th>Administrator</th>
-    <th><%= order @search, :by => :last_login_on %></th>
-    <th>Authorized by</th>
+    <th><%= sort :login %></th>
+    <th><%= sort :firstname %></th>
+    <th><%= sort :lastname %></th>
+    <th><%= sort :mail %></th>
+    <th><%= sort :admin %></th>
+    <th><%= sort :last_login_on %></th>
+    <th><%= _("Authorized by") %></th>
     <th></th>
   </tr>
   <% for user in @users %>
-    <tr class="<%= cycle("even", "odd")-%>" >
-      <td><%=link_to_if_authorized h(user.login), hash_for_edit_user_path(:id => user) %></td>
+    <tr>
+      <td><%= gravatar_image_tag user.mail, :class => "gravatar" %> <%=link_to_if_authorized h(user.login), hash_for_edit_user_path(:id => user) %></td>
       <td><%=h user.firstname %></td>
       <td><%=h user.lastname %></td>
       <td><%=h user.mail %></td>
-      <td><%=admin_column user %></td>
+      <td><%=checked_icon user.admin? %></td>
       <td><%=h last_login_on_column(user)%></td>
       <td><%=h auth_source_column(user)%></td>
-      <td><%= display_link_if_authorized "Destroy", hash_for_user_path(:id => user, :auth_action => :destroy), :confirm => "Delete #{user.name}?", :method => :delete %></td>
+      <td><%= display_delete_if_authorized hash_for_user_path(:id => user), :confirm => _("Delete %s?") % user.name %></td>
     </tr>
   <% end %>
 </table>
 
 <%= page_entries_info @users %>
 <%= will_paginate @users %>
-
-<p><%= display_link_if_authorized "New User", hash_for_new_user_path %></p>

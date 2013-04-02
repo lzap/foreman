@@ -1,6 +1,10 @@
 class UsergroupsController < ApplicationController
   def index
-    @usergroups = Usergroup.all(:order => "name")
+    @usergroups = Usergroup.paginate :page => params[:page]
+    respond_to do |format|
+      format.html
+      format.json { render :json => @usergroups}
+    end
   end
 
   def new
@@ -10,10 +14,9 @@ class UsergroupsController < ApplicationController
   def create
     @usergroup = Usergroup.new(params[:usergroup])
     if @usergroup.save
-      flash[:foreman_notice] = "Successfully created usergroup."
-      redirect_to usergroups_path
+      process_success
     else
-      render :action => 'new'
+      process_error
     end
   end
 
@@ -23,23 +26,19 @@ class UsergroupsController < ApplicationController
 
   def update
     @usergroup = Usergroup.find(params[:id])
-
     if @usergroup.update_attributes(params[:usergroup])
-      flash[:foreman_notice] = "Successfully updated usergroup."
-      redirect_to usergroups_path
+      process_success
     else
-      render :action => 'edit'
+      process_error
     end
   end
 
   def destroy
     @usergroup = Usergroup.find(params[:id])
     if @usergroup.destroy
-      flash[:foreman_notice] = "Successfully destroyed usergroup."
+      process_success
     else
-      logger.error @usergroup.errors.full_messages
-      flash[:foreman_error] = @usergroup.errors.full_messages.join "<br/>"
+      process_error
     end
-    redirect_to usergroups_path
   end
 end

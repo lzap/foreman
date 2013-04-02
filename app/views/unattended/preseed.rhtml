@@ -8,8 +8,8 @@ d-i console-setup/layoutcode string us
 
 # Network configuration
 d-i netcfg/choose_interface select auto
-d-i netcfg/get_hostname string <%= @host.name %>
-d-i netcfg/get_domain string <%= @host.domain.name %>
+d-i netcfg/get_hostname string <%= @host %>
+d-i netcfg/get_domain string <%= @host.domain %>
 d-i netcfg/wireless_wep string
 
 d-i hw-detect/load_firmware boolean true
@@ -63,4 +63,4 @@ d-i grub-installer/with_other_os boolean true
 
 d-i finish-install/reboot_in_progress note
 
-d-i preseed/late_command string wget <%= foreman_url("preseed_finish") %> -O /target/tmp/finish.sh && in-target chmod +x /tmp/finish.sh && in-target /tmp/finish.sh
+d-i preseed/late_command string wget <%= foreman_url("finish") %> -O /target/tmp/finish.sh && in-target chmod +x /tmp/finish.sh && in-target /tmp/finish.sh

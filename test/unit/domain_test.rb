@@ -4,8 +4,7 @@ class DomainTest < ActiveSupport::TestCase
   def setup
     User.current = users(:admin)
     @new_domain = Domain.new
-    @domain = Domain.new(:name => "myDomain")
-    @domain.save
+    @domain = domains(:mydomain)
   end
 
   test "should not save without a name" do
@@ -13,7 +12,7 @@ class DomainTest < ActiveSupport::TestCase
   end
 
   test "should exists a unique name" do
-    other_domain = Domain.new(:name => "myDomain")
+    other_domain = Domain.new(:name => "mydomain.net")
     assert !other_domain.save
   end
 
@@ -25,23 +24,15 @@ class DomainTest < ActiveSupport::TestCase
     assert !other_domain.save
   end
 
-  test "the dnsserver name should not contain spaces" do
-    @domain.dnsserver = "this contains spaces"
-    assert !@domain.save
-  end
-
-  test "the gateway name should not contain spaces" do
-    @domain.gateway = "this contains spaces"
-    assert !@domain.save
-  end
-
   test "when cast to string should return the name" do
     s = @domain.to_s
     assert_equal @domain.name, s
   end
 
   test "should not destroy if it contains hosts" do
-    host   = create_a_host
+    disable_orchestration
+    host = create_a_host
+    assert host.save
 
     domain = host.domain
     assert !domain.destroy
@@ -51,11 +42,25 @@ class DomainTest < ActiveSupport::TestCase
   test "should not destroy if it contains subnets" do
 
     as_admin do
-      Subnet.create!  :number => "123.123.123.1", :mask => "321.321.321.1",
-                      :domain => @domain
+      Subnet.create! :network => "123.123.123.1", :mask => "255.255.255.0",
+                     :domains => [@domain], :name => "test subnet"
     end
     assert !@domain.destroy
     assert_match /is used by/, @domain.errors.full_messages.join("\n")
+  end
+
+  test "domain can be assigned to locations" do
+    location1 = Location.create :name => "Zurich"
+    assert location1.save!
+
+    location2 = Location.create :name => "Switzerland"
+    assert location2.save!
+
+    domain = Domain.create :name => "test.net"
+    domain.locations = []
+    domain.locations.push location1
+    domain.locations.push location2
+    assert domain.save!
   end
 
 #I must find out how to create a fact_name inside of fact_value
@@ -66,14 +71,7 @@ class DomainTest < ActiveSupport::TestCase
 #  end
 
   def create_a_host
-    as_admin do
-      Host.create :name => "myfullhost", :mac => "aabbecddeeff", :ip => "123.05.02.03",
-                   :domain => @domain,
-                   :operatingsystem => Operatingsystem.first,
-                   :architecture => Architecture.find_or_create_by_name("i386"),
-                   :environment => Environment.find_or_create_by_name("envy"),
-                   :disk => "empty partition"
-    end
+    hosts(:one)
   end
 
   def setup_user operation
@@ -94,7 +92,7 @@ class DomainTest < ActiveSupport::TestCase
       @one.domains = [domains(:mydomain)]
     end
     record =  Domain.find_by_name "mydomain.net"
-    assert record.update_attributes :name => "testing"
+    assert record.update_attributes(:name => "testing")
     assert record.valid?
   end
 
@@ -111,7 +109,7 @@ class DomainTest < ActiveSupport::TestCase
   test "user with edit permissions should be able to edit when unconstrained" do
     setup_user "edit"
     record =  Domain.first
-    assert record.update_attributes :name => "testing"
+    assert record.update_attributes(:name => "testing")
     assert record.valid?
   end
 
@@ -124,7 +122,9 @@ class DomainTest < ActiveSupport::TestCase
 
   test "user with destroy permissions should be able to destroy" do
     setup_user "destroy"
-    record =  Domain.first
+    record = domains(:useless)
+    record.interfaces.clear
+    record.hosts.clear
     assert record.destroy
     assert record.frozen?
   end
@@ -132,6 +132,7 @@ class DomainTest < ActiveSupport::TestCase
   test "user with edit permissions should not be able to destroy" do
     setup_user "edit"
     record =  Domain.first
+    record.subnets.clear
     assert !record.destroy
     assert !record.frozen?
   end
@@ -150,5 +151,13 @@ class DomainTest < ActiveSupport::TestCase
     assert !record.save
   end
 
+  test "should query local nameservers when enabled" do
+    Setting['query_local_nameservers'] = true
+    assert Domain.first.nameservers.empty?
+  end
+
+  test "should query remote nameservers" do
+    assert Domain.first.nameservers.empty?
+  end
 end
 

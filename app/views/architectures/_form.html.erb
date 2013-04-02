@@ -1,12 +1,6 @@
-<% form_for @architecture do |f| %>
-  <%= f.error_messages %>
-  <p>
-  <%= f.label :name %><br />
-  <%= f.text_field :name %>
-  </p>
-  <p>
-  <%= authorized_edit_habtm @architecture, Operatingsystem %>
-  </p>
-  <br/>
-  <%= f.submit "Submit" %>
+<%= form_for @architecture do |f| %>
+  <%= base_errors_for @architecture %>
+  <%= text_f f, :name %>
+  <%= multiple_checkboxes(f, :operatingsystems, @architecture, Operatingsystem, :label => "Operating Systems") %>
+  <%= submit_or_cancel f %>
 <% end %>

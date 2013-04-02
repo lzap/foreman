@@ -5,4 +5,9 @@ one:
 
 two:
   name: apache
-  nameindicator: MyString
+
+three:
+  name: git
+
+four:
+  name: vim

@@ -1,19 +1,39 @@
-<div id="searchbar" style="clear:both;">
-  <div id="tabs" class="odd">
-    <ul>
-      <li><%= link_to_function "Search", toggle_searchbar %></li>
-      <% for tab in @tabs.keys.sort -%>
-        <%= searchtab tab, @tabs[tab], :selected => (@active_tab == tab) %>
-      <% end -%>
-      <%= searchtab "Reset", {}, :selected => false, :no_close_button => true %>
-    </ul>
+<%= form_tag eval("#{controller_name}_path"), :method => "get", :class=>"form-inline form-search row-fluid" do %>
+    <div class="btn-toolbar btn-toolbar-condensed">
+    <div class="btn-group span12">
+      <div class="span9">
+        <%= auto_complete_search(:search, params[:search].try(:squeeze," "),
+                                 {:placeholder => _("Filter ...")},
+                                 { :delay => 100, :min_length => -1 }).html_safe %>
+        </div>
+      <button class="btn hidden-phone" onclick="$('.form-search').submit()"><%= icon_text("search", _("Search")) %></button>
+
+      <button class="btn dropdown-toggle" data-toggle="dropdown">
+        <i class="caret"></i>
+      </button>
+      <ul class="dropdown-menu pull-right">
+        <% bookmarks = Bookmark.my_bookmarks.controller(controller_name) %>
+        <% bookmarks.each do |bookmark| -%>
+            <li><%= link_to_if_authorized bookmark.name, eval("hash_for_#{bookmark.controller}_path").merge(:search => bookmark.query) %></li>
+        <% end -%>
+        <li class="divider"></li>
+        <li><%= link_to_function 'Bookmark this search', "$('#bookmarks-modal').modal();",
+                                 {:id => "bookmark", :"data-url"=> new_bookmark_path(:kontroller => controller_name)}%></li>
+      </ul>
+    </div>
+    </div>
+<% end -%>
+
+<div id="bookmarks-modal" class="modal hide fade">
+  <div class="modal-header">
+    <a href="#" class="close" data-dismiss="modal">&times;</a>
+    <h3><%= _("Add Bookmark") %></h3>
   </div>
-  <div id="search" style="display:none">
-    <ul>
-      <li><%= link_to_function "Search", toggle_searchbar  %></li>
-      <li>
-        <%= render :partial => 'search_line' %>
-      </li>
-    </ul>
+  <div class="modal-body">
+
+  </div>
+  <div class="modal-footer">
+    <a href="#" class="btn btn-primary"><%= _("Submit") %></a>
+    <a href="#" class="btn" data-dismiss="modal"><%= _("Cancel") %></a>
   </div>
 </div>

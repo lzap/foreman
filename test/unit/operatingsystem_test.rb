@@ -58,13 +58,9 @@ class OperatingsystemTest < ActiveSupport::TestCase
     operating_system = Operatingsystem.new :name => "Ubuntu", :major => "10"
     assert operating_system.save
 
-    host = Host.new :name => "myfullhost", :mac => "aabbecddeeff", :ip => "123.05.02.03",
-      :domain => Domain.find_or_create_by_name("company.com"), :operatingsystem => operating_system,
-      :architecture => Architecture.first, :environment => Environment.first, :disk => "empty partition",
-      :ptable => Ptable.first
-    assert host.save!
-
-    operating_system.hosts << host
+    host = hosts(:one)
+    host.os = operating_system
+    host.save(:validate => false)
 
     assert !operating_system.destroy
   end

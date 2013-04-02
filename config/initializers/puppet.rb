@@ -1,23 +1,22 @@
-class Resource < Puppet::Rails::Resource
-end
-class SourceFile < Puppet::Rails::SourceFile
-end
-class ResourceTag < Puppet::Rails::ResourceTag
-end
-class ParamValue < Puppet::Rails::ParamValue
+require 'active_support/dependencies'
+ActiveSupport::Dependencies.unhook!
+
+require 'puppet'
+require 'puppet/rails'
+
+ActiveSupport::Dependencies.hook!
+
+if Puppet::PUPPETVERSION.to_i < 3
+  Puppet.parse_config
 end
 
-# We reopen the class and add the associations here as we canot subclass it in app/models as this breaks puppet internals
-class Puppet::Rails::FactName
-  has_many :user_facts
-  has_many :users, :through => :user_facts
-end
+$puppet = Puppet.settings.instance_variable_get(:@values) if Rails.env == "test"
 
 # workaround for puppet bug http://projects.reductivelabs.com/issues/3949
 if Facter.puppetversion == "0.25.5"
   begin
     require 'RRDtool'
-  rescue LoadError => detail
+  rescue LoadError
     nil
   end
 end

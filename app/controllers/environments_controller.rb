@@ -1,15 +1,19 @@
+require 'foreman/controller/environments'
+
 class EnvironmentsController < ApplicationController
   include Foreman::Controller::Environments
+  include Foreman::Controller::AutoCompleteSearch
 
   before_filter :find_by_name, :only => %w{show edit update destroy}
 
   def index
+    values = Environment.search_for(params[:search], :order => params[:order])
     respond_to do |format|
       format.html do
-        @search       = Environment.search(params[:search])
-        @environments = @search.paginate :page => params[:page]
+        @environments = values.paginate :page => params[:page]
+        @counter      = Host.count(:group => :environment_id, :conditions => {:environment_id => @environments})
       end
-      format.json { render :json => Environment.all.as_json }
+      format.json { render :json => values.as_json }
     end
   end
 
@@ -27,10 +31,9 @@ class EnvironmentsController < ApplicationController
   def create
     @environment = Environment.new(params[:environment])
     if @environment.save
-      flash[:foreman_notice] = "Successfully created environment."
-      redirect_to environments_path
+      process_success
     else
-      render :action => 'new'
+      process_error
     end
   end
 
@@ -39,20 +42,18 @@ class EnvironmentsController < ApplicationController
 
   def update
     if @environment.update_attributes(params[:environment])
-      flash[:foreman_notice] = "Successfully updated environment."
-      redirect_to environments_path
+      process_success
     else
-      render :action => 'edit'
+      process_error
     end
   end
 
   def destroy
     if @environment.destroy
-      flash[:foreman_notice] = "Successfully destroyed '#{@environment.name}''"
+      process_success
     else
-      flash[:foreman_error]  = @environment.errors.full_messages.join("<br/>")
+      process_error
     end
-    redirect_to environments_url
   end
 
 end

@@ -1,26 +1,19 @@
 class HostObserver < ActiveRecord::Observer
-  def after_create(host)
-    # get net free ip address from subnet
-    # get hostname
-    # ...
-    # e.g. send out an email that a new host was created
-    host.logger.info "trying to create new host #{host.name}" if host.logger
+  observe Host::Base
+
+  # Sets and expire provisioning tokens
+  # this has to happen post validation and before the orchesration queue is starting to 
+  # process, as the token value is required within the tftp config file manipulations
+  def after_validation(host)
+    return unless SETTINGS[:unattended]
+    # new server in build mode
+    if host.new_record? and host.build?
+      host.set_token
+    end
+    # existing server change build mode
+    if host.respond_to?(:old) and host.old and host.build? != host.old.build?
+      host.build? ? host.set_token : host.expire_tokens
+    end
   end
 
-  def after_save(host)
-    #create tftp entry
-    #create dns entry
-    #create dhcp entry
-    #....
-  end
-
-  def after_update(host)
-    #check if anything was changed if we need to update some external netDb
-  end
-
-  def after_destroy(host)
-    # cleans out the puppet certificate once a host has been deleted
-    GW::Puppetca.clean host.name
-    #clean up our netDb
-  end
 end

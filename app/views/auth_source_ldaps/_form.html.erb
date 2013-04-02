@@ -1,61 +1,23 @@
-<% form_for @auth_source_ldap do |f| %>
-  <%= f.error_messages %>
-  <p>
-  <%= f.label :name %><br />
-  <%= f.text_field :name %>
-  </p>
-  <p>
-  <%= f.label :host %><br />
-  <%= f.text_field :host %>
-  </p>
-  <p>
-  <%= f.label :port %><br />
-  <%= f.text_field :port, :size => 6 %>
-  <%= f.check_box :tls %>
-  <%= f.label :tls, "LDAPS" %>
-  </p>
-  <p>
-  <%= f.label :account %><br />
-  <%= f.text_field :account %>
-  <small> Use this account to authenticate, optional </small>
-  </p>
-  <p>
-  <%= f.label :account_password %><br />
-  <%= f.password_field :account_password,
-    :value => ((@auth_source_ldap.new_record? || @auth_source_ldap.account_password.blank?) ? '' : ('x'*15)),
-    :onfocus => "this.value='';"
-  %>
-  <small> Use this account to authenticate, optional </small>
-  </p>
-  <p>
-  <%= f.label :base_dn %><br />
-  <%= f.text_field :base_dn, :size => 60 %>
-  </p>
-  <p>
-  <%= f.label :onthefly_register, "On-the-fly user creation" %>
-  <%= f.check_box :onthefly_register %>
-  </p>
-  <% field_set_tag("Attributes") do %>
-    <p>
-    <%= f.label :attr_login %><br />
-    <%= f.text_field :attr_login %>
-    <small>e.g. uid</small>
-    </p>
-    <p>
-    <%= f.label :attr_firstname %><br />
-    <%= f.text_field :attr_firstname %>
-    <small>e.g. givenName</small>
-    </p>
-    <p>
-    <%= f.label :attr_lastname %><br />
-    <%= f.text_field :attr_lastname %>
-    <small>e.g. sn</small>
-    </p>
-    <p>
-    <%= f.label :attr_mail %><br />
-    <%= f.text_field :attr_mail %>
-    <small>e.g. mail</small>
-    </p>
+<% title_actions link_to(icon_text("question-sign", "Documentation", :class => "icon-white"), "http://theforeman.org/projects/foreman/wiki/LDAP_Authentication", :rel => "external", :class => "btn-info") %>
+
+<%= form_for @auth_source_ldap do |f| %>
+  <%= base_errors_for @auth_source_ldap %>
+
+  <%= text_f f, :name %>
+  <%= text_f f, :host %>
+  <%= text_f f, :port %>
+  <%= checkbox_f f, :tls, :label => "LDAPS" %>
+  <%= text_f f, :account, :help_inline =>"Use this account to authenticate,<i>optional</i>".html_safe %>
+  <%= password_f f, :account_password, :onfocus => "this.value='';", :help_inline => "Use this account to authenticate, <i>optional</i>".html_safe %>
+  <%= text_f f, :base_dn, :label => "basedn", :class => "input-xxlarge" %>
+  <%= checkbox_f f, :onthefly_register, :label => "On-the-fly user creation",
+    :help_inline => "LDAP user will have his Foreman account automatically created the first time he logs into Foreman" %>
+  <%= field_set_tag("LDAP Attributes mapping") do %>
+    <%= text_f f, :attr_login, :help_inline => "e.g. uid" %>
+    <%= text_f f, :attr_firstname, :help_inline => "e.g. givenName" %>
+    <%= text_f f, :attr_lastname, :help_inline => "e.g. sn" %>
+    <%= text_f f, :attr_mail, :help_inline => "e.g. mail" %>
   <% end -%>
-  <p><%= f.submit "Submit" %></p>
+
+  <%= submit_or_cancel f %>
 <% end %>

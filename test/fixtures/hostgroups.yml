@@ -2,6 +2,23 @@
 
 common:
   name: Common
+  architecture: x86_64
+  ptable: one
+  environment: production
+  operatingsystem: centos5_3
+  medium: one
+  puppet_proxy: puppetmaster
+  domain: mydomain
 
 unusual:
   name: Unusual
+  puppet_proxy: puppetmaster
+
+db:
+  name: db
+  architecture: x86_64
+  ptable: one
+  environment: production
+  operatingsystem: centos5_3
+  medium: one
+  puppet_proxy: puppetmaster

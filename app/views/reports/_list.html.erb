@@ -1,34 +1,31 @@
-<table class="list">
+<table class="table table-bordered table-striped">
   <tr>
-    <% unless defined? @host -%>
-      <th><%= order @search, :by => :host_name, :as => "Host" %></th>
+    <% unless params[:host_id] -%>
+      <th><%= sort :host %></th>
     <% end -%>
-    <th><%= order @search, :by => :reported_at, :as => "Last report" %></th>
-    <th>Applied</th>
-    <th>Restarted</th>
-    <th>Failed</th>
-    <th>Failed restarts</th>
-    <th>Skipped</th>
-    <th>Config retrieval</th>
-    <th>Runtime</th>
-    <th></th>
+    <th><%= sort :reported, :as => "Last report" %></th>
+    <th class="small"><%= sort :applied %></th>
+    <th class="small"><%= sort :restarted %></th>
+    <th class="small"><%= sort :failed %></th>
+    <th class="small"><%= sort :failed_restarts, :as => "Restart<br>Failures" %></th>
+    <th class="small"><%= sort :skipped %></th>
+    <th class="small"><%= sort :pending %></th>
+    <th class="small"></th>
   </tr>
   <% for report in @reports %>
-    <tr class="<%= cycle("even", "odd") -%>">
-      <% unless defined? @host -%>
-        <td><%= link_to h(report.host.shortname), reports_host_path(report.host) + "?search[interesting]=1" %></td>
+    <tr>
+      <% unless params[:host_id] -%>
+        <td><%= link_to h(report.host), host_reports_path(report.host) %></td>
       <% end -%>
       <td><%= reported_at_column(report) %></td>
-      <td><%= h report.applied %></td>
-      <td><%= h report.restarted %></td>
-      <td><%= h report.failed %></td>
-      <td><%= h report.failed_restarts %></td>
-      <td><%= h report.skipped %></td>
-      <td><%= h report.config_retrieval %></td>
-      <td><%= h report.runtime %></td>
+      <td><%= report_event_column(report.applied, "label-info") %></td>
+      <td><%= report_event_column(report.restarted, "label-info") %></td>
+      <td><%= report_event_column(report.failed, "label-important") %></td>
+      <td><%= report_event_column(report.failed_restarts, "label-warning") %></td>
+      <td><%= report_event_column(report.skipped, "label-info") %></td>
+      <td><%= report_event_column(report.pending, "label-info") %></td>
       <td align="right">
-        <%= link_to "Details", report %>
-        <%= display_link_if_authorized "Destroy", hash_for_report_path(:id => report.id, :auth_action => :destroy), :confirm => "Delete report for #{report.host.name}?", :method => :delete %>
+        <%= display_delete_if_authorized hash_for_report_path(:id => report.id), :confirm => "Delete report for #{report.host.name}?" %>
       </td>
     </tr>
   <% end %>

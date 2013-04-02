@@ -1,43 +1,47 @@
-class ReportsController < ApplicationController
-  skip_before_filter :require_login,             :only => :create
-  skip_before_filter :require_ssl,               :only => :create
-  skip_before_filter :authorize,                 :only => :create
-  skip_before_filter :verify_authenticity_token, :only => :create
-  before_filter :set_admin_user, :only => :create
+require 'foreman/controller/smart_proxy_auth'
 
-  # avoids storing the report data in the log files
-  filter_parameter_logging :report
+class ReportsController < ApplicationController
+  include Foreman::Controller::AutoCompleteSearch
+  include Foreman::Controller::SmartProxyAuth
+
+  add_puppetmaster_filters :create
+  before_filter :setup_search_options, :only => :index
 
   def index
-    @interesting = (params[:search] and params[:search][:interesting] and params[:search][:interesting] == "true")
-    search_cmd  = "Report"
-    for condition in Report::METRIC
-      search_cmd += ".with('#{condition.to_s}', #{params[condition]})" if params.has_key? condition
+    values = Report.my_reports.search_for(params[:search], :order => params[:order])
+    pagination_opts = { :page => params[:page], :per_page => params[:per_page] }
+    respond_to do |format|
+      format.html { @reports =      values.paginate(pagination_opts).includes(:host) }
+      format.json { render :json => values.paginate(pagination_opts).includes(:host, :logs)}
     end
-    search_cmd += ".search(params[:search])"
-    # set defaults search order - cant use default scope due to bug in AR
-    # http://github.com/binarylogic/searchlogic/issues#issue/17
-    params[:search] ||=  {}
-    params[:search][:order] ||= "descend_by_created_at"
-
-    @search  = eval search_cmd
-    @reports = @search.paginate :page => params[:page], :include => [{:host => :domain}]
+  rescue => e
+    error e.to_s
+    @reports = Report.my_reports.search_for("").paginate :page => params[:page]
   end
 
   def show
-    @report = Report.find(params[:id])
-    @offset = @report.reported_at - @report.created_at
+    # are we searching for the last report?
+    if params[:id] == "last"
+      conditions = { :host_id => Host.find_by_name(params[:host_id]).try(:id) } unless params[:host_id].blank?
+      params[:id] = Report.my_reports.maximum(:id, :conditions => conditions)
+    end
+
+    return not_found if params[:id].blank?
+
+    @report = Report.my_reports.find(params[:id], :include => { :logs => [:message, :source] })
+    respond_to do |format|
+      format.html { @offset = @report.reported_at - @report.created_at }
+      format.json { render :json => @report }
+    end
   end
 
   def create
-    respond_to do |format|
-      format.yml {
-        if Report.import params.delete("report")
-          render :text => "Imported report", :status => 200 and return
-        else
-          render :text => "Failed to import report", :status => 500
-        end
-      }
+    Taxonomy.no_taxonomy_scope do
+      if Report.import params.delete("report") || request.body
+        render :text => "Imported report", :status => 200 and return
+      else
+        render :text => "Failed to import report", :status => 500
+      end
     end
   rescue => e
     render :text => e.to_s, :status => 500
@@ -46,10 +50,11 @@ class ReportsController < ApplicationController
   def destroy
     @report = Report.find(params[:id])
     if @report.destroy
-      flash[:foreman_notice] = "Successfully destroyed report."
+      notice "Successfully destroyed report."
     else
-      flash[:foreman_error] = @report.errors.full_messages.join("<br/>")
+      error @report.errors.full_messages.join("<br/>")
     end
     redirect_to reports_url
   end
+
 end
