@@ -217,8 +217,10 @@ class User < ActiveRecord::Base
       user = try_to_auto_create_user(login, password)
     end
     if user
+      Foreman::Telemetry.increment "login.successful"
       user.post_successful_login
     else
+      Foreman::Telemetry.increment "login.failed"
       logger.info "invalid user"
       User.current = nil
     end

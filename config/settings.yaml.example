@@ -32,6 +32,15 @@
 :domain: 'localdomain.net'
 :fqdn: 'localhost.localdomain.net'
 
+# Telemetry configuration. Destination can be 'logger' or 'statsd'.
+#:telemetry_destination: 'logger'
+# Prefix is "foreman.HOSTNAME" by default.
+#:telemetry_prefix: 'foreman'
+#:telemetry_statsd_host: 'localhost'
+#:telemetry_statsd_port: 8125
+# Statsd protocol is one of 'statsd', 'statsite' or 'datadog'
+#:telemetry_statsd_protocol: 'statsd'
+
 # Log settings for the current environment can be adjusted by adding them
 # here. It is also possible to override settings per environment. See
 # logging.yaml for more details and examples.
@@ -53,4 +62,6 @@
 #  :sql:
 #    :enabled: false
 #  :templates:
+#    :enabled: true
+#  :telemetry:
 #    :enabled: true
