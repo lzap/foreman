@@ -27,7 +27,7 @@ class ConfigReportsController < ApplicationController
 
     return not_found if params[:id].blank?
 
-    @config_report = resource_base.includes(:logs => [:message, :source]).find(params[:id])
+    @config_report = resource_base.find(params[:id])
     @offset = @config_report.reported_at - @config_report.created_at
   end
 

@@ -3,14 +3,14 @@ module Foreman
     class << self
       def scan(report, logs)
         if (is_puppet = puppet_report?(logs))
-          report.origin = 'Puppet'
+          report.origin = "Puppet"
         end
         is_puppet
       end
 
       def puppet_report?(logs)
         log = logs.last
-        log && log['log'].fetch('sources', {}).fetch('source', '') =~ /Puppet/
+        log && log["log"].fetch("sources", {}).fetch("source", "") =~ /Puppet/
       end
     end
   end

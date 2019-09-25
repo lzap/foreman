@@ -1,4 +1,4 @@
-<% title "#{@config_report.host}"%>
+<% title "#{@config_report.host}" %>
 <% breadcrumbs(switchable: false) %>
 
 <p class='ra'> <%= _("Reported at %s ") % @config_report.reported_at %> </p>
@@ -12,7 +12,7 @@
 
 <% content_for(:search_bar) {logs_show} %>
 
-<%= render report_origin_output_partial(@config_report.origin), :logs => @config_report.logs %>
+<%= render report_origin_output_partial(@config_report.origin), :report_body => @config_report.logs %>
 <%= render 'metrics', :status => @config_report.status, :metrics => @config_report.metrics["time"] if @config_report.metrics["time"] %>
 
 <%= title_actions display_delete_if_authorized(hash_for_config_report_path(:id => @config_report), :class=> "btn btn-danger"),

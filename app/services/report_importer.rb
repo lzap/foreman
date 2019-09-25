@@ -35,7 +35,7 @@ class ReportImporter
   end
 
   def import
-    logger.debug { "Processing report: #{raw.inspect}" }
+    logger.debug { "Processing data: #{raw.inspect}" }
     telemetry = {}
     telemetry_duration_histogram(:report_importer_create, :ms, {type: self.class.name}, telemetry) do
       create_report_and_logs
@@ -48,6 +48,7 @@ class ReportImporter
       refresh = telemetry[:report_importer_refresh].try(:round, 1)
       logger.info("Imported report for #{name} in #{create} ms, status refreshed in #{refresh} ms")
     end
+    logger.debug { "Processed report: #{report.inspect}" }
   end
 
   def scan
@@ -82,21 +83,15 @@ class ReportImporter
   end
 
   def import_log_messages
+    result = []
     logs.each do |log|
-      # Parse the API format
-      level = log['log']['level']
-      msg   = log['log']['messages']['message']
-      src   = log['log']['sources']['source']
-
-      message = Message.find_or_create msg
-      source  = Source.find_or_create src
-
-      # Symbols get turned into strings via the JSON API, so convert back here if it matches
-      # and expected log level. Log objects can't be created without one, so raise if not
-      raise(::Foreman::Exception.new(N_("Invalid log level: %s", level))) unless Report::LOG_LEVELS.include?(level)
-
-      Log.create(:message_id => message.id, :source_id => source.id, :report => report, :level => level.to_sym)
+      line = []
+      line << log['log']['level']
+      line << log['log']['messages']['message']
+      line << log['log']['sources']['source']
+      result << line
     end
+    report.body["logs"] = result
   end
 
   def report_status

@@ -1,3 +1,4 @@
+# TODO: this class should be named PuppetReport (needs migration of existing report types)
 class ConfigReport < Report
   METRIC = %w[applied restarted failed failed_restarts skipped pending]
   BIT_NUM = 6
@@ -21,6 +22,14 @@ class ConfigReport < Report
 
   class << self
     delegate :model_name, :to => :superclass
+  end
+
+  def index_to_column
+    @@index_to_column ||= [
+      "Level",
+      "Source",
+      "Message",
+    ]
   end
 
   def self.import(report, proxy_id = nil)

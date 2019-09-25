@@ -11,12 +11,17 @@ class ConfigReportImporter < ReportImporter
 
   def create_report_and_logs
     super
-    return report unless report.persisted?
+
     # we update our host record, so we won't need to lookup the report information just to display the host list / info
     host.update_attribute(:last_report, time) if host.last_report.nil? || host.last_report.utc < time
 
-    # Store all Puppet message logs
+    # parse and import Puppet messages
     import_log_messages
+
+    logger.debug { "Changes after scanning: #{report.changes.inspect}" }
+
+    # save the record
+    report.save
 
     # Check for errors
     notify_on_report_error(:config_error_state)

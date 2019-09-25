@@ -33,11 +33,11 @@ module ReportsHelper
 
   def report_tag(level)
     tag = case level
-          when :notice
+          when :notice, "notice", "info"
             "info"
-          when :warning
+          when :warning, "warning", "warn"
             "warning"
-          when :err
+          when :err, "error", "err", "critical", "crit", "alert", "emerg", "fatal"
             "danger"
           else
             "default"
@@ -46,7 +46,7 @@ module ReportsHelper
   end
 
   def logs_show
-    return if @config_report.logs.empty?
+    return if @config_report.logs.count == 0
     form_tag config_report_path(@config_report), :id => 'level_filter', :method => :get, :class => "form form-horizontal" do
       content_tag(:span, _("Show log messages:") + ' ') +
       select(nil, 'level', [[_('All messages'), 'info'], [_('Notices, warnings and errors'), 'notice'], [_('Warnings and errors'), 'warning'], [_('Errors only'), 'error']],
@@ -70,10 +70,10 @@ module ReportsHelper
     'output'.freeze
   end
 
-  def config_report_content(log)
-    message = log.message.to_s
+  def config_report_content(message, source)
+    message = message
     if message.start_with?("\n---")
-      filename = log.source.value.to_s.scan(/File\[(.*?)\]/).flatten.first rescue ""
+      filename = source.scan(/File\[(.*?)\]/).flatten.first rescue ""
       return link_to(_('Show Diff'), '#', data: {diff: message, title: filename}, onclick: 'tfm.configReportsModalDiff.showDiff(this);')
     end
     message

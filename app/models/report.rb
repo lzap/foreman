@@ -1,5 +1,7 @@
+# TODO test reports:
+# ["applied", "empty", "errors", "no-logs", "skipped"].each { |file| ConfigReport.import(JSON.load(File.read("test/static_fixtures/reports/#{file}.json"))) }
 class Report < ApplicationRecord
-  LOG_LEVELS = %w[debug info notice warning err alert emerg crit]
+  serialize :body, Foreman::IndifferentAccessDeserializer
 
   prepend Foreman::STI
   include Authorizable
@@ -7,9 +9,6 @@ class Report < ApplicationRecord
 
   validates_lengths_from_database
   belongs_to_host
-  has_many :logs, :dependent => :destroy
-  has_many :messages, :through => :logs
-  has_many :sources, :through => :logs
   has_one :environment, :through => :host
   has_one :hostgroup, :through => :host
 
@@ -17,6 +16,7 @@ class Report < ApplicationRecord
   has_one :location, :through => :host
 
   validates :host_id, :status, :presence => true
+  # TODO - reviewer: why on Earth this is unique, the check is very expensive
   validates :reported_at, :presence => true, :uniqueness => {:scope => [:host_id, :type]}
 
   def self.inherited(child)
@@ -51,24 +51,31 @@ class Report < ApplicationRecord
   # with_changes
   scope :interesting, -> { where("status <> 0") }
 
-  # extracts serialized metrics and keep them as a hash_with_indifferent_access
-  def metrics
-    return {} if self[:metrics].nil?
-    YAML.load(read_metrics).with_indifferent_access
+  # list of column names which appear in report logs
+  def index_to_column
+    raise NotImplementedError
   end
 
-  # serialize metrics as YAML
-  def metrics=(m)
-    self[:metrics] = m.to_h.to_yaml unless m.nil?
+  def column_to_index(column)
+    index_to_column.index(column)
+  end
+
+  def metrics
+    return {} if body.blank?
+
+    body["metrics"]
+  end
+
+  def metrics=(metrics)
+    body["metrics"] = metrics
   end
 
   def to_label
     "#{host.name} / #{reported_at}"
   end
 
-  # add sort by report time
   def <=>(other)
-    self.created_at <=> other.created_at
+    self.reported_at <=> other.reported_at
   end
 
   # Expire reports based on time and status
@@ -79,7 +86,7 @@ class Report < ApplicationRecord
     status = conditions[:status]
     created = (Time.now.utc - timerange).to_formatted_s(:db)
     logger.info "Starting #{to_s.underscore.humanize.pluralize} expiration before #{created} status #{status || 'not set'} batch size #{batch_size} sleep #{sleep_time}"
-    cond = "created_at < \'#{created}\'"
+    cond = "reported_at < \'#{created}\'"
     cond += " and status = #{status}" unless status.nil?
     total_count = 0
     report_ids = []
@@ -123,14 +130,9 @@ class Report < ApplicationRecord
     Foreman::Plugin.report_origin_registry.all_origins
   end
 
-  private
+  def logs
+    return [] if body.blank?
 
-  def read_metrics
-    yml_hash = '!ruby/hash:ActiveSupport::HashWithIndifferentAccess'
-    yml_params = /!ruby\/[\w-]+:ActionController::Parameters/
-
-    metrics_attr = self[:metrics]
-    metrics_attr.gsub!(yml_params, yml_hash)
-    metrics_attr
+    body["logs"]
   end
 end

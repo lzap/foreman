@@ -7,14 +7,14 @@
     </tr>
   </thead>
   <tbody>
-    <% logs.each do |log| %>
+    <% report_body.each do |log| %>
       <tr>
-        <td><span <%= report_tag log.level %>><%= h log.level %></span></td>
-        <td class="break-me"><%= h log.source %></td>
-        <td class="break-me"><%= config_report_content(log) %></td>
+        <td><span <%= report_tag log[0] %>><%= h log[0] %></span></td>
+        <td class="break-me"><%= h log[1] %></td>
+        <td class="break-me"><%= config_report_content(log[2], log[1]) %></td>
       </tr>
     <% end %>
-    <tr id='ntsh' <%= "style='display: none;'".html_safe if logs.size > 0%>><td colspan="3">
+    <tr id='ntsh' <%= "style='display: none;'".html_safe if report_body.size > 0%>><td colspan="3">
         <%= _("Nothing to show") %>
       </td></tr>
   </tbody>
