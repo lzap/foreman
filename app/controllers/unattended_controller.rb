@@ -127,17 +127,20 @@ class UnattendedController < ApplicationController
   def render_ipxe_template
     return false unless ipxe_request?
 
-    if @host.nil? && params[:bootstrap]
+    # Return immediately if bootstrap was requested
+    if params[:bootstrap]
       render_intermediate_template
       return true
     end
 
-    if @host.nil?
+    # The host is not known and it's not the bootstrap script
+    if @host.nil? && !params[:mac]
       render_default_global_template
       return true
     end
 
-    unless @host.try(:build?)
+    # Host not in build was found and it's not bootstrap script
+    if @host && !@host.build?
       render_local_boot_template
       return true
     end
