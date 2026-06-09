@@ -209,7 +209,119 @@ class UsergroupTest < ActiveSupport::TestCase
     assert_equal recipients, [users[0]]
   end
 
-  # TODO test who can modify usergroup roles and who can assign users!!! possible privileges escalation
+  context 'role assignment (privilege escalation)' do
+    setup do
+      @owned_role = Role.where(:name => "usergroup_test_owned_role").first_or_create
+      @foreign_role = Role.where(:name => "usergroup_test_foreign_role").first_or_create
+    end
+
+    test "non-admin with create_usergroups cannot assign roles they do not have" do
+      setup_user "create", "usergroups"
+      usergroup = Usergroup.new(:name => "escalation-blocked-create", :role_ids => [@foreign_role.id])
+      refute usergroup.valid?
+      assert_includes usergroup.errors.attribute_names, :role_ids
+    end
+
+    test "non-admin with create_usergroups can assign roles they already hold" do
+      setup_user "create", "usergroups" do |user|
+        user.roles << @owned_role
+      end
+      usergroup = Usergroup.new(:name => "delegated-roles-ok", :role_ids => [@owned_role.id])
+      assert_valid usergroup
+      assert usergroup.save
+    end
+
+    test "non-admin with edit_usergroups cannot add roles they do not hold" do
+      usergroup = as_admin { FactoryBot.create(:usergroup, :name => "escalation-update-target", :role_ids => [@owned_role.id]) }
+      setup_user "edit", "usergroups" do |user|
+        user.roles << @owned_role
+      end
+      usergroup.role_ids = usergroup.role_ids + [@foreign_role.id]
+      refute usergroup.valid?
+      assert_includes usergroup.errors.attribute_names, :role_ids
+    end
+
+    test "non-admin member of usergroup cannot add a role granting escalate_roles" do
+      usergroup = as_admin { FactoryBot.create(:usergroup, :name => "escalate-via-membership") }
+      escalate_role = as_admin do
+        role = FactoryBot.create(:role, :name => "role_with_escalate")
+        FactoryBot.create(:filter, :role => role, :permissions => [permissions(:escalate_roles)])
+        role
+      end
+      setup_user "edit", "usergroups" do |user|
+        usergroup.users << user
+      end
+      usergroup.role_ids = [escalate_role.id]
+      refute usergroup.valid?
+      assert_includes usergroup.errors.attribute_names, :role_ids
+    end
+
+    test "member of usergroup with escalate_roles can add other roles to that usergroup" do
+      escalate_role = as_admin do
+        role = FactoryBot.create(:role, :name => "role_with_escalate_for_member")
+        FactoryBot.create(:filter, :role => role, :permissions => [permissions(:escalate_roles)])
+        role
+      end
+      usergroup = as_admin { FactoryBot.create(:usergroup, :name => "escalate-member-adds-role", :role_ids => [escalate_role.id]) }
+      setup_user "edit", "usergroups" do |user|
+        usergroup.users << user
+      end
+      usergroup.role_ids = usergroup.role_ids + [@foreign_role.id]
+      assert_valid usergroup
+    end
+
+    test "transitive member of usergroup cannot add a role granting escalate_roles" do
+      parent_usergroup = as_admin { FactoryBot.create(:usergroup, :name => "escalate-transitive-parent") }
+      child_usergroup = as_admin { FactoryBot.create(:usergroup, :name => "escalate-transitive-child") }
+      as_admin { parent_usergroup.usergroups << child_usergroup }
+      escalate_role = as_admin do
+        role = FactoryBot.create(:role, :name => "role_with_escalate_transitive")
+        FactoryBot.create(:filter, :role => role, :permissions => [permissions(:escalate_roles)])
+        role
+      end
+      setup_user "edit", "usergroups" do |user|
+        child_usergroup.users << user
+      end
+      parent_usergroup.role_ids = [escalate_role.id]
+      refute parent_usergroup.valid?
+      assert_includes parent_usergroup.errors.attribute_names, :role_ids
+    end
+
+    test "non-admin cannot create usergroup with self as member and a role granting escalate_roles" do
+      escalate_role = as_admin do
+        role = FactoryBot.create(:role, :name => "role_with_escalate_create_self")
+        FactoryBot.create(:filter, :role => role, :permissions => [permissions(:escalate_roles)])
+        role
+      end
+      setup_user "create", "usergroups"
+      usergroup = Usergroup.new(:name => "escalate-create-self", :role_ids => [escalate_role.id], :user_ids => [User.current.id])
+      refute usergroup.valid?
+      assert_includes usergroup.errors.attribute_names, :role_ids
+    end
+
+    test "admin can assign arbitrary roles to usergroup" do
+      as_admin do
+        usergroup = Usergroup.new(:name => "admin-assigns-roles", :role_ids => [@foreign_role.id])
+        assert_valid usergroup
+        assert usergroup.save
+      end
+    end
+
+    test "user with escalate_roles permission can assign roles they do not hold to usergroup" do
+      user = FactoryBot.create(:user, :admin => false)
+      escalate_role = FactoryBot.create(:role)
+      FactoryBot.create(:user_role, :owner => user, :role => escalate_role)
+      FactoryBot.create(:filter, :role => escalate_role, :permissions => [permissions(:escalate_roles)])
+      usergroup_role = FactoryBot.create(:role)
+      FactoryBot.create(:user_role, :owner => user, :role => usergroup_role)
+      FactoryBot.create(:filter, :role => usergroup_role, :permissions => [permissions(:create_usergroups)])
+      as_user user do
+        usergroup = Usergroup.new(:name => "escalate-roles-ok", :role_ids => [@foreign_role.id])
+        assert_valid usergroup
+        assert usergroup.save
+      end
+    end
+  end
 
   context 'external usergroups' do
     setup do
