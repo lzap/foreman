@@ -384,8 +384,8 @@ class Api::V2::ReportTemplatesControllerTest < ActionController::TestCase
       @controller.expects(:load_dynflow_plan).with('JOBID').returns(plan)
     end
 
-    def stub_plan_arguments(gzip: false, user_id: User.current.id, mail_to: nil)
-      composer_params = { 'template_id' => report_template.id, 'input_values' => nil, 'gzip' => gzip, 'send_mail' => !!mail_to, 'mail_to' => mail_to }
+    def stub_plan_arguments(gzip: false, user_id: User.current.id, mail_to: nil, format: nil)
+      composer_params = { 'template_id' => report_template.id, 'input_values' => nil, 'gzip' => gzip, 'send_mail' => !!mail_to, 'mail_to' => mail_to, 'format' => format }
       @controller.stubs(:plan_arguments).returns([composer_params, { 'user_id' => user_id }])
     end
 
@@ -432,15 +432,27 @@ class Api::V2::ReportTemplatesControllerTest < ActionController::TestCase
         assert_equal 'plain response', response.body
       end
 
-      it 'return gziped stored_content if job done and has gzip param' do
-        stub_plan_arguments(gzip: true)
-        compressed_value = ActiveSupport::Gzip.compress('plain response')
-        StoredValue.expects('read').with('JOBID').returns(compressed_value)
+      it 'serves compressed report as gzip download' do
+        stub_plan_arguments
+        compressed = ActiveSupport::Gzip.compress('plain response')
+        StoredValue.expects('read').with('JOBID').returns(compressed)
 
         get :report_data, params: { id: report_template.id, job_id: 'JOBID' }
         assert_response :success
         assert_equal 'application/gzip', response.media_type
-        assert_equal compressed_value, response.body
+        assert_equal compressed, response.body
+      end
+
+      it 'does not double-encode JSON report data' do
+        stub_plan_arguments(format: 'json')
+        json_string = [{ 'name' => 'host1', 'ip' => '192.168.0.1' }].to_json
+        StoredValue.expects('read').with('JOBID').returns(json_string)
+
+        get :report_data, params: { id: report_template.id, job_id: 'JOBID' }
+        assert_response :success
+        assert_equal 'application/json', response.media_type
+        parsed = JSON.parse(response.body)
+        assert_kind_of Array, parsed, 'Expected response body to parse as an Array, not a String (double-encoded JSON)'
       end
     end
   end
